@@ -123,6 +123,19 @@ class H5600ScheduleRunner @Inject constructor(
         // Every time sync (from any screen, any moment) writes this location inside it
         // (H5600SettingsIO.writeLocationInTimeSync). Fresh each time, real or weather coordinates.
         api.setH5600HomeLocationProvider { effectiveLocation() }
+        // The Time-tab clock marked "on the watch" becomes the watch's world city on every time sync.
+        api.setWorldCityProvider {
+            org.avmedia.gshockGoogleSync.ui.time.WorldClocks.watchClock(context)?.let { it.zone to it.name }
+        }
+    }
+
+    /**
+     * The world city changed on the Time tab: sync now, in the background. Not while an alarm may be
+     * snoozing (a time sync cancels the snooze); the next quarter-hour sync then picks it up.
+     */
+    fun requestWorldCitySync() = background("world city") {
+        if (snoozeActive()) { Timber.i("World city: snooze window, applied at the next sync"); return@background }
+        syncLocationAndTime()
     }
 
     /**
