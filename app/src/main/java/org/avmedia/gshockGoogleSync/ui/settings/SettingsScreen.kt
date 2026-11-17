@@ -79,8 +79,7 @@ fun SettingsList() {
             Font(settingsViewModel::onSettingUpdated)
         }
         // Time adjustment card removed: on the DW-H5600 it only held Fine Adjustment, now on the Time tab.
-        GreetingCard()
-        RideCard()
+        // Start screen greeting and "What are we riding?" are at the bottom of the Custom tab.
         DisconnectCard(onDisconnect = settingsViewModel::disconnectWatch)
     }
 }

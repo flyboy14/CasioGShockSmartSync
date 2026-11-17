@@ -43,6 +43,10 @@ fun CustomScreen(vm: H5600ViewModel = hiltViewModel()) {
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                     ) {
                         H5600Card(vm)
+                        // Start screen greeting and the cover screen's ride (moved here from Settings).
+                        Spacer(modifier = Modifier.height(8.dp))
+                        org.avmedia.gshockGoogleSync.ui.settings.GreetingCard()
+                        org.avmedia.gshockGoogleSync.ui.settings.RideCard()
                         Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
