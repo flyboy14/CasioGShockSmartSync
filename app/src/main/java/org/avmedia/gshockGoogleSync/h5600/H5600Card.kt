@@ -215,11 +215,10 @@ private fun WatchFaceCard(vm: H5600ViewModel) {
                 WatchFaceItem.SUNRISE_SUNSET to "Sun", WatchFaceItem.STEPS to "Steps", WatchFaceItem.MOON to "Moon",
                 WatchFaceItem.HEART_RATE to "Heart rate", WatchFaceItem.SLEEP to "Sleep",
             )
+            // The chosen item is the highlighted button; only an item the app has no button for is named.
             AppText(
-                text = (if (s.faceNumber == 1) "Face 2 item (not shown on face 1): " else "Face 2 item: ") +
-                    (if (s.dynamicFace) "Auto, now " else "") + (faceLabels.firstOrNull { it.first != null && it.first == s.watchFace }?.second
-                    ?: s.watchFace?.name?.lowercase()?.replace('_', ' ')
-                    ?: s.watchFaceCode?.let { "unknown (code 0x%02X)".format(it) } ?: "unknown"),
+                text = (if (s.faceNumber == 1) "Face 2 item (not shown on face 1)" else "Face 2 item") +
+                    (s.watchFaceCode?.takeIf { s.watchFace == null }?.let { ": unknown (code 0x%02X)".format(it) } ?: ""),
                 modifier = Modifier.padding(top = 8.dp),
             )
             // Current choice highlighted (Auto = the phone switches Steps / Sun data around sunset).
@@ -235,7 +234,6 @@ private fun WatchFaceCard(vm: H5600ViewModel) {
                     }
                 }
             }
-            if (s.dynamicFace) AppText(text = "Today: ${s.sunsetText}", fontSize = 13.sp)
             if (s.dynamicFace) Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -276,16 +274,16 @@ private fun SunWeatherCard(vm: H5600ViewModel) {
                 AppSwitch(checked = s.tempSun, onCheckedChange = { vm.setTempSun(it) })
             }
             // Real values to compare with the watch (phone location, Open-Meteo)
-            AppText(text = "Real today: ${s.realSun}", fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+            AppText(text = s.realSun.replaceFirstChar { it.uppercase() }, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 AppText(text = "Weather now: ${s.realWeather}", fontSize = 13.sp, modifier = Modifier.weight(1f))
                 org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(text = "Refresh", onClick = { vm.refreshWeatherOnly() })
             }
-            AppText(text = "Watch should show: ${s.watchShould}", fontSize = 13.sp)
+            AppText(text = "Watch should show: ${s.watchShould}", fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
             if (s.tempSun) {
                 // Fine-tune for the watch's own sun formula (measured: top +2, sunset -3)
                 listOf(
@@ -293,7 +291,7 @@ private fun SunWeatherCard(vm: H5600ViewModel) {
                     Triple("Sunset fine-tune", s.setCorr, false),
                 ).forEach { (label, value, isRise) ->
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -312,6 +310,7 @@ private fun SunWeatherCard(vm: H5600ViewModel) {
             org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(
                 text = "Send loc/time",
                 onClick = { vm.sendLocation() },
+                modifier = Modifier.padding(top = 12.dp),
             )
         }
     }
@@ -351,15 +350,6 @@ private fun SoundNotificationsCard(vm: H5600ViewModel) {
                 }
             }
 
-            // Raw sound packet + re-read (used to map the per-function CUSTOM bits)
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AppText(text = "0x42: " + s.soundHex.ifEmpty { "…" }, fontSize = 13.sp)
-                org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(text = "Re-read", onClick = { vm.refresh() })
-            }
             s.lastApplied?.let { AppText(text = "Last applied: $it", fontSize = 13.sp) }
             // Notification app filter
             var filter by remember { mutableStateOf(NotificationFilter.load(context)) }
