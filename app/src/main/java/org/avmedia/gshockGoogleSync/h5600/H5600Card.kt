@@ -330,9 +330,9 @@ private fun SoundNotificationsCard(vm: H5600ViewModel) {
                 "Alarm days and Vibe only / Sound are set per alarm in the Alarms tab; the phone switches the sound " +
                 "mode for the alarm that is due next.<br><br>Notifications only from chosen apps: when on, only the " +
                 "checked apps reach the watch; when off, every app's notifications do.")
-            // Sound mode
-            AppText(
-                text = "Sound mode: " + (s.soundMode?.name?.replace('_', ' ') ?: if (s.busy) "reading…" else "unknown"),
+            // Sound mode: the active button shows it; text only while it is not known yet.
+            if (s.soundMode == null) AppText(
+                text = if (s.busy) "Reading sound mode…" else "Sound mode unknown",
                 modifier = Modifier.padding(top = 8.dp),
             )
             // All five modes; the current one is greyed out. Two rows so they fit on a phone.
