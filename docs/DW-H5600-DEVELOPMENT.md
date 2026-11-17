@@ -168,7 +168,10 @@ for alarms, the face in Auto, the sun data / weather. The rule for all of them:
   `nextNightBoundary`, slot reloads) with exact Android alarms, and each pass writes only when the
   watch differs (`api.setSoundMode` reads first and skips equal writes).
 - **Protect running alarms:** time syncs and alarm-slot writes cancel a snooze on the watch, so
-  automatic passes hold them during a snooze window (`AlarmPool.snoozing`).
+  automatic passes hold them during a snooze window (`AlarmPool.snoozing`). The snooze state is
+  known, not guessed: the watch sends nothing, but a button press while it rings does not end the
+  snooze (only switching the alarm off on the watch does), so a snooze runs its whole window unless
+  the phone stops it (`AlarmPool.dismiss`, `SnoozeNotifier`).
 - A user change that affects the timetable (alarm edit, night time, DND switch) calls
   `runner.applyAlarms()` so the watch is updated at once and the next wake-up is re-planned.
 

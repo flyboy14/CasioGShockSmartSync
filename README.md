@@ -28,7 +28,7 @@ Each alarm has:
 - **repeat**: *Once*, every day, Mon–Fri, weekends or any set of days
 - **Sound + vibe** or **Vibe only** — the watch has one sound mode for everything, so the alarm *borrows* it: five minutes before it rings the mode it needs is set, and after the ring (or the snooze) your own mode comes back
 - **snooze** on/off
-- **smart wake**: ring up to 15/30/45/60 minutes early, in light sleep
+- **smart wake**: ring up to 15/30/45/60 minutes early, in light sleep (needs heart-rate monitoring *All day* or *Activities + night*, Sport tab)
 
 A **one-time** alarm switches itself off after it has rung (and finished snoozing), and is set again for its next time when you switch it back on.
 
@@ -121,7 +121,7 @@ A transfer takes a while — the watch sends in small pieces — so the last res
 
 <img src="docs/screenshots/12_sport.png" width="240" align="right" alt="Sport tab">
 
-- **Heart-rate monitor**: *All day* (daytime heart rate, calories, sleep evaluation), *Activities + night*, or *Off* — the watch's battery trade-off.
+- **Heart-rate monitor**: *All day* (daytime heart rate, calories, sleep evaluation), *Activities + night*, or *Off* — the watch's battery trade-off. Smart alarms need one of the first two.
 - **Heart-rate values**: max and resting heart rate, the watch's own estimate or your own value; VO2max as measured by the watch.
 - **Daily step goal** (− / + in 500s), a **notification** when you reach it, and the **step reminder** (the watch nudges you after a long time without moving).
 
