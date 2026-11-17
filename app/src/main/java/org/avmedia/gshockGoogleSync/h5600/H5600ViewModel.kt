@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import org.avmedia.gshockGoogleSync.data.repository.GShockRepository
 import org.avmedia.gshockGoogleSync.ui.common.AppSnackbar
+import org.avmedia.gshockapi.model.HeartRateMonitor
 import org.avmedia.gshockapi.model.SoundMode
 import org.avmedia.gshockapi.model.WatchFaceItem
 import timber.log.Timber
@@ -45,7 +46,15 @@ class H5600ViewModel @Inject constructor(
         val sunsetText: String = "",
         val faceLeadMin: Int = SunFace.DEFAULT_LEAD_MIN,
         val lastApplied: String? = null,
-    )
+        val hrMonitorCode: Int? = null, // 0x41 byte 1 (raw, see HeartRateMonitor)
+        // Settings tab (read by refreshSettings): 0x13 display/night, 0x4F physical, 0x43 goal, 0x41 zone alert
+        val basic: org.avmedia.gshockapi.model.H5600Basic? = null,
+        val physical: org.avmedia.gshockapi.model.H5600Physical? = null,
+        val stepGoal: org.avmedia.gshockapi.model.StepGoal? = null,
+        val zoneAlert: org.avmedia.gshockapi.model.HeartRateZoneAlert? = null,
+    ) {
+        val hrMonitor: HeartRateMonitor? get() = hrMonitorCode?.let(HeartRateMonitor::fromCode)
+    }
 
     // Start from the last values read from the watch; null (spinner) only if never read.
     private val _state = MutableStateFlow(
@@ -55,6 +64,7 @@ class H5600ViewModel @Inject constructor(
             watchFaceCode = org.avmedia.gshockGoogleSync.utils.LastKnown.int(context, "watch_face"),
             faceNumber = org.avmedia.gshockGoogleSync.utils.LastKnown.int(context, "face_number"),
             watchFace = org.avmedia.gshockGoogleSync.utils.LastKnown.int(context, "watch_face")?.let(WatchFaceItem::fromCode),
+            hrMonitorCode = org.avmedia.gshockGoogleSync.utils.LastKnown.int(context, "hr_monitor"),
         ),
     )
     val state: StateFlow<UiState> = _state
@@ -139,6 +149,7 @@ class H5600ViewModel @Inject constructor(
                 val f = async { readOrNull { api.getH5600WatchFaceNumber() } }
                 c.await() to f.await()
             }
+            val hr = readOrNull { api.getH5600HeartRateMonitorCode() }
             Timber.i("H5600 re-read: 0x42=$hex mode=$mode face=$code")
             _state.update {
                 it.copy(
@@ -147,12 +158,14 @@ class H5600ViewModel @Inject constructor(
                     watchFaceCode = code ?: it.watchFaceCode,
                     watchFace = (code ?: it.watchFaceCode)?.let(WatchFaceItem::fromCode),
                     faceNumber = faceNo ?: it.faceNumber,
+                    hrMonitorCode = hr ?: it.hrMonitorCode,
                 )
             }
             mode?.let { m -> org.avmedia.gshockGoogleSync.utils.LastKnown.put(context, "sound_mode", m.code) }
             hex?.let { h -> org.avmedia.gshockGoogleSync.utils.LastKnown.put(context, "sound_hex", h) }
             code?.let { c -> org.avmedia.gshockGoogleSync.utils.LastKnown.put(context, "watch_face", c) }
             faceNo?.let { f -> org.avmedia.gshockGoogleSync.utils.LastKnown.put(context, "face_number", f) }
+            hr?.let { h -> org.avmedia.gshockGoogleSync.utils.LastKnown.put(context, "hr_monitor", h) }
         }
     }
 
@@ -203,6 +216,103 @@ class H5600ViewModel @Inject constructor(
             _state.update { it.copy(watchFaceCode = code, watchFace = WatchFaceItem.fromCode(code)) }
             org.avmedia.gshockGoogleSync.utils.LastKnown.put(context, "watch_face", code)
         }
+    }
+
+    /** Reads the values shown on the Settings tab (one after another: the watch answers one at a time). */
+    fun refreshSettings() {
+        if (!api.isH5600SettingsSupported()) return
+        run("read settings") {
+            val basic = readOrNull { api.getH5600Basic() }
+            val physical = readOrNull { api.getH5600Physical() }
+            val goal = readOrNull { api.getH5600StepGoal() }
+            val zone = readOrNull { api.getH5600HeartRateZoneAlert() }
+            val hr = readOrNull { api.getH5600HeartRateMonitorCode() }
+            _state.update {
+                it.copy(
+                    basic = basic ?: it.basic, physical = physical ?: it.physical,
+                    stepGoal = goal ?: it.stepGoal, zoneAlert = zone ?: it.zoneAlert,
+                    hrMonitorCode = hr ?: it.hrMonitorCode,
+                )
+            }
+        }
+    }
+
+    // Quick taps (+/- buttons, toggles): the UI moves at once, one watch write after the last tap.
+    private val pendingWrites = mutableMapOf<String, kotlinx.coroutines.Job>()
+
+    private fun debouncedWrite(key: String, what: String, block: suspend () -> Unit) {
+        pendingWrites[key]?.cancel()
+        pendingWrites[key] = viewModelScope.launch {
+            kotlinx.coroutines.delay(700)
+            run(what, onError = { refreshSettings() }, block = block)
+        }
+    }
+
+    fun setBasic(v: org.avmedia.gshockapi.model.H5600Basic) {
+        _state.update { it.copy(basic = v) }
+        debouncedWrite("basic", "display settings") { api.setH5600Basic(v) }
+    }
+
+    fun setPhysical(v: org.avmedia.gshockapi.model.H5600Physical) {
+        _state.update { it.copy(physical = v) }
+        debouncedWrite("physical", "heart-rate / sleep settings") { api.setH5600Physical(v) }
+    }
+
+    /**
+     * Night time: the watch keeps it twice, in 0x13 (notifications) and 0x4F (sleep / HR); the
+     * official app writes the same times to both.
+     */
+    fun setNightTime(startH: Int, startM: Int, endH: Int, endM: Int) {
+        val b = _state.value.basic ?: return
+        val p = _state.value.physical
+        val nb = b.copy(nightStartHour = startH, nightStartMin = startM, nightEndHour = endH, nightEndMin = endM)
+        val np = p?.copy(sleepStartHour = startH, sleepStartMin = startM, wakeHour = endH, wakeMin = endM)
+        _state.update { it.copy(basic = nb, physical = np ?: it.physical) }
+        run("night time", onError = { refreshSettings() }) {
+            api.setH5600Basic(nb)
+            if (np != null) api.setH5600Physical(np)
+        }
+    }
+
+    fun setStepGoal(g: org.avmedia.gshockapi.model.StepGoal) {
+        _state.update { it.copy(stepGoal = g) }
+        debouncedWrite("goal", "step goal") { api.setH5600StepGoal(g) }
+    }
+
+    fun setZoneAlert(a: org.avmedia.gshockapi.model.HeartRateZoneAlert) {
+        _state.update { it.copy(zoneAlert = a) }
+        debouncedWrite("zone", "heart-rate zone alert") { api.setH5600HeartRateZoneAlert(a) }
+    }
+
+    /** Sets the heart-rate monitor mode (0x41) and confirms it from the watch. */
+    fun setHeartRateMonitor(mode: HeartRateMonitor) {
+        val previous = _state.value.hrMonitorCode
+        _state.update { it.copy(hrMonitorCode = mode.code) }
+        run("set heart-rate monitor", onError = { _state.update { it.copy(hrMonitorCode = previous) } }) {
+            writeHeartRateMonitor(mode)
+        }
+    }
+
+    private suspend fun writeHeartRateMonitor(mode: HeartRateMonitor) {
+        val before = api.setH5600HeartRateMonitor(mode)
+        // Remember the mode used before all-day monitoring, to go back to it when HR leaves the face.
+        if (mode == HeartRateMonitor.ALL_DAY && before != null && before != HeartRateMonitor.ALL_DAY.code) {
+            H5600Prefs.get(context).edit().putInt(KEY_HR_BEFORE_ALL_DAY, before).apply()
+        }
+        val code = confirm(mode.code) { api.getH5600HeartRateMonitorCode() }
+        _state.update { it.copy(hrMonitorCode = code) }
+        org.avmedia.gshockGoogleSync.utils.LastKnown.put(context, "hr_monitor", code)
+    }
+
+    /** The mode to go back to when all-day monitoring is turned off from the watch-face dialog. */
+    fun hrModeWhenOff(): HeartRateMonitor =
+        H5600Prefs.get(context).getInt(KEY_HR_BEFORE_ALL_DAY, -1).let(HeartRateMonitor::fromCode)
+            ?.takeIf { it != HeartRateMonitor.ALL_DAY } ?: HeartRateMonitor.ACTIVITY_AND_NIGHT
+
+    /** Watch-face item, then (if the user agreed in the dialog) the heart-rate monitor mode. */
+    fun setWatchFace(item: WatchFaceItem, hrMode: HeartRateMonitor?) {
+        setWatchFace(item)
+        if (hrMode != null) setHeartRateMonitor(hrMode)
     }
 
     /** On: fetch the temperature now and send the fake coordinates. Off: send the real location again. */
@@ -303,6 +413,12 @@ class H5600ViewModel @Inject constructor(
     }
 
     /** A watch read whose failure keeps the last known value; real cancellation is rethrown. */
+    companion object {
+        private const val KEY_HR_BEFORE_ALL_DAY = "hr_before_all_day"
+        /** Face items that need the watch to measure heart rate during the day. */
+        val HR_ITEMS = setOf(WatchFaceItem.HEART_RATE, WatchFaceItem.HEART_RATE_MIN_MAX)
+    }
+
     private suspend fun <T> readOrNull(block: suspend () -> T?): T? =
         try {
             kotlinx.coroutines.withTimeoutOrNull(12_000) { block() }

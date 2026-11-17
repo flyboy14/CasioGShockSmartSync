@@ -1,6 +1,7 @@
 package org.avmedia.gshockGoogleSync
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -38,6 +39,17 @@ data class BottomNavigationItem(
                     ),
                     icon = Icons.Outlined.FavoriteBorder,
                     route = Screens.Health.route
+                )
+            )
+        }
+
+        // "Sport" tab (fork): DW-H5600 heart rate / fitness settings, left of Alarms.
+        if (org.avmedia.gshockapi.WatchInfo.model == org.avmedia.gshockapi.WatchInfo.WatchModel.DW_H5600) {
+            baseItems.add(
+                BottomNavigationItem(
+                    label = "Sport",
+                    icon = androidx.compose.material.icons.Icons.AutoMirrored.Outlined.DirectionsRun,
+                    route = Screens.Sport.route
                 )
             )
         }

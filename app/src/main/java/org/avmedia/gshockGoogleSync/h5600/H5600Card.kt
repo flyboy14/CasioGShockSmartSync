@@ -147,6 +147,52 @@ private fun FindPhoneCard() {
 @Composable
 private fun WatchFaceCard(vm: H5600ViewModel) {
     val s by vm.state.collectAsState()
+    // HR on the face needs all-day monitoring: ask before turning it on, and before turning it off
+    // when HR leaves the face. The face changes either way; Cancel / tapping outside changes nothing.
+    var hrAsk by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<HrAsk?>(null) }
+    val onFaceItem: (WatchFaceItem) -> Unit = { item ->
+        val wasHr = s.watchFace in H5600ViewModel.HR_ITEMS
+        val isHr = item in H5600ViewModel.HR_ITEMS
+        val allDay = s.hrMonitor == org.avmedia.gshockapi.model.HeartRateMonitor.ALL_DAY
+        hrAsk = when {
+            item == s.watchFace -> null
+            isHr && !wasHr && !allDay -> HrAsk(item, turnOn = true)
+            !isHr && wasHr && (allDay || s.hrMonitorCode == null) -> HrAsk(item, turnOn = false)
+            else -> null
+        }
+        if (hrAsk == null && item != s.watchFace) vm.setWatchFace(item)
+    }
+    hrAsk?.let { ask ->
+        val off = vm.hrModeWhenOff()
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { hrAsk = null },
+            title = {
+                androidx.compose.material3.Text(
+                    if (ask.turnOn) "Turn on all-day heart-rate monitoring?" else "Turn off all-day heart-rate monitoring?",
+                )
+            },
+            text = {
+                androidx.compose.material3.Text(
+                    if (ask.turnOn) "The heart-rate item shows live readings only with all-day monitoring. " +
+                        "The watch's heart-rate monitor will be set to All day (higher battery use)."
+                    else "Heart rate is leaving the watch face. The monitor goes back to " +
+                        "${hrModeLabel(off)} (less battery use).",
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    hrAsk = null
+                    vm.setWatchFace(ask.item, if (ask.turnOn) org.avmedia.gshockapi.model.HeartRateMonitor.ALL_DAY else off)
+                }) { androidx.compose.material3.Text(if (ask.turnOn) "Turn on" else "Turn off") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    hrAsk = null
+                    vm.setWatchFace(ask.item, null)
+                }) { androidx.compose.material3.Text(if (ask.turnOn) "Keep off" else "Keep on") }
+            },
+        )
+    }
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
             AppTextLarge(text = "Watch face")
@@ -191,7 +237,7 @@ private fun WatchFaceCard(vm: H5600ViewModel) {
                             text = label,
                             selected = s.watchFace == item,
                             enabled = !s.dynamicFace,
-                            onClick = { vm.setWatchFace(item) },
+                            onClick = { onFaceItem(item) },
                         )
                     }
                 }
@@ -352,6 +398,48 @@ private fun SoundNotificationsCard(vm: H5600ViewModel) {
             AppText(
                 text = if (filter.enabled) "Only checked apps reach the watch." else "Off: every app's notifications reach the watch.",
                 fontSize = 13.sp,
+            )
+        }
+    }
+}
+
+private data class HrAsk(val item: WatchFaceItem, val turnOn: Boolean)
+
+private fun hrModeLabel(m: org.avmedia.gshockapi.model.HeartRateMonitor): String = when (m) {
+    org.avmedia.gshockapi.model.HeartRateMonitor.ALL_DAY -> "All day"
+    org.avmedia.gshockapi.model.HeartRateMonitor.ACTIVITY_AND_NIGHT -> "Activities + night"
+    org.avmedia.gshockapi.model.HeartRateMonitor.OFF -> "Off"
+}
+
+/**
+ * Heart-rate monitor mode (packet 0x41), the three options of the CASIO app. Shown on the Settings tab.
+ * Values from the CASIO app's decompiled code (Off 0, RunActOnly 1, AlwaysOn 2).
+ */
+@Composable
+internal fun HeartRateMonitorCard(vm: H5600ViewModel) {
+    val s by vm.state.collectAsState()
+    if (!s.supported) return
+    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            AppTextLarge(text = "Heart-rate monitor")
+            val options = listOf(
+                org.avmedia.gshockapi.model.HeartRateMonitor.ALL_DAY to
+                    "All functions: daytime heart rate, calories, sleep evaluation. High battery use.",
+                org.avmedia.gshockapi.model.HeartRateMonitor.ACTIVITY_AND_NIGHT to
+                    "Only during activities and at night; no daytime heart rate. Moderate battery use.",
+                org.avmedia.gshockapi.model.HeartRateMonitor.OFF to "No heart-rate measurement. Lowest battery use.",
+            )
+            if (s.hrMonitorCode == null) org.avmedia.gshockGoogleSync.ui.common.LoadingSpinner()
+            else Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
+                options.forEach { (m, _) ->
+                    AppChoiceButton(text = hrModeLabel(m), selected = s.hrMonitor == m, onClick = { vm.setHeartRateMonitor(m) })
+                }
+            }
+            AppText(
+                text = options.firstOrNull { it.first == s.hrMonitor }?.second
+                    ?: s.hrMonitorCode?.let { "Unknown mode (code 0x%02X)".format(it) } ?: "",
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
     }

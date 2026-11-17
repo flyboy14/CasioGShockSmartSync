@@ -207,6 +207,9 @@ fun BottomNavigationBarWithPermissions(
             composable(Screens.Custom.route) {
                 org.avmedia.gshockGoogleSync.h5600.CustomScreen()
             }
+            composable(Screens.Sport.route) {
+                org.avmedia.gshockGoogleSync.h5600.SportScreen()
+            }
             composable(Screens.Settings.route) {
                 SettingsScreen()
             }
@@ -294,7 +297,7 @@ private object LastTab {
     private const val KEY = "last_tab_route"
     private val TABS = setOf(
         Screens.Time.route, Screens.Health.route, Screens.Alarms.route, Screens.Events.route,
-        Screens.Actions.route, Screens.Custom.route, Screens.Settings.route,
+        Screens.Actions.route, Screens.Custom.route, Screens.Sport.route, Screens.Settings.route,
     )
 
     fun get(context: android.content.Context): String =
