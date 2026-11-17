@@ -120,6 +120,25 @@ class H5600ScheduleRunner @Inject constructor(
     fun requestStopSnooze(id: String) = background("stop snooze") { stopSnooze(id) }
 
     init {
+        // Debug builds: protocol probing over adb, e.g.
+        //   adb shell am broadcast -a org.avmedia.gshockGoogleSync.RAW --es get 52
+        //   adb shell am broadcast -a org.avmedia.gshockGoogleSync.RAW --es set "13 04 01 ..."
+        // Replies appear in logcat ("Notification from ...").
+        if (org.avmedia.gshockGoogleSync.BuildConfig.DEBUG) {
+            val receiver = object : android.content.BroadcastReceiver() {
+                override fun onReceive(c: android.content.Context, i: android.content.Intent) {
+                    val parse = { h: String -> h.trim().split(Regex("[\\s,]+")).filter { it.isNotEmpty() }.map { it.toInt(16) }.toIntArray() }
+                    runCatching {
+                        i.getStringExtra("get")?.let { api.h5600RawSend(true, parse(it)) }
+                        i.getStringExtra("set")?.let { api.h5600RawSend(false, parse(it)) }
+                    }.onFailure { timber.log.Timber.e(it, "RAW probe failed") }
+                }
+            }
+            androidx.core.content.ContextCompat.registerReceiver(
+                context, receiver, android.content.IntentFilter("org.avmedia.gshockGoogleSync.RAW"),
+                androidx.core.content.ContextCompat.RECEIVER_EXPORTED,
+            )
+        }
         // Every time sync (from any screen, any moment) writes this location inside it
         // (H5600SettingsIO.writeLocationInTimeSync). Fresh each time, real or weather coordinates.
         api.setH5600HomeLocationProvider { effectiveLocation() }

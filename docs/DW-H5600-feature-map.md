@@ -68,3 +68,28 @@ Status: **Have** = already in the fork · **Ready** = layout known and the watch
 | Connection / advertising parameters (connect interval, timeout) | `0x3A` / `0x3B` | – | Partly (could make reconnects faster) |
 | Watch name, firmware version, module ID | `0x23`, `0x20`, `0x26` | – | Ready (read only) |
 | Operation log | `0x5A` | – | Partly |
+
+## Tested on the watch (2026-11-17, write then read back)
+
+A read sweep of 0x10-0x7F: the watch answers 10 11 13 15 16 18 1D 1E 1F 20 22 23 24 25 26 27 28 2A 2F
+39 3A 3B 40 41 42 43 44 45 47 4F 50 51 52 53 56 57 58 5A; everything else is rejected (`FF 81 xx`).
+
+| Setting | Packet / bits | Result |
+|---|---|---|
+| HR monitor mode | 0x41 byte 1 bits 0-1 | **kept** |
+| HR zone alert, zone | 0x41 byte 1 bits 2-4, byte 2 | dropped |
+| Step goal, goal notification | 0x43 bytes 1-3, byte 16 bit 0x01 | **kept** |
+| Sleep time, max / resting HR (+ manual flags) | 0x4F | **kept** |
+| Night time | 0x13 bytes 13-16 | **kept** |
+| Step reminder | 0x13 byte 12 bit 0x02 | **kept** |
+| Watch mode list (order, removing a mode) | 0x52 bytes 2.. (IDs below) | **kept** |
+| Date order / weekday language / font | 0x13 byte 4 / 5 / byte 8 bit 0x20 | dropped |
+| Operation vibration | 0x13 byte 10 bit 0x01 | dropped |
+| Auto pause | 0x40 byte 1 bit 0x02 | dropped |
+| Distance in miles | 0x2F byte 4 bit 0x02 | dropped |
+| User profile | 0x45 | the watch's format is not the BCD layout the app uses: not decoded |
+
+0x52 mode IDs (CASIO WidgetItem): 01 Time & date, 02 Heart rate, 03 Life log, 04 Stress, 05 Nightly
+recharge, 06 Activity log, 07 Cardio load, 08 Breathing exercise, 09 Notifications, 0A Blood oxygen,
+0B Altimeter, 0C Barometer, 0D Compass, 0E Stopwatch, 0F Timer, 10 World time, 11 Almanac, 12 QR, 13 Tide.
+Ours: `52 01 0F 0E 11 10 02 08 09 0A 03 05 06`.

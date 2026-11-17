@@ -62,7 +62,14 @@ fun BatteryBarsView(rawLevel: Int) {
     val context = LocalContext.current
     var version by remember { mutableIntStateOf(0) } // recompute after a calibration
     val (bars, sure) = remember(rawLevel, version) { BatteryBars.barsFor(rawLevel, BatteryBars.calibration(context)) }
-    val fill = if (sure) Color(0xFF4CAF50) else Color(0xFF4CAF50).copy(alpha = 0.5f)
+    // Pastel by charge: 1 bar red, 2 orange, 3 light green, 4 green.
+    val base = when (bars) {
+        1 -> Color(0xFFEF9A9A)
+        2 -> Color(0xFFFFCC80)
+        3 -> Color(0xFFC5E1A5)
+        else -> Color(0xFF81C784)
+    }
+    val fill = if (sure) base else base.copy(alpha = 0.5f)
     val frame = Color(0xFF9E9E9E)
     Row(
         verticalAlignment = Alignment.CenterVertically,
