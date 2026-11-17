@@ -40,6 +40,34 @@ private fun RideToUnlock(onUnlock: () -> Unit) {
     val offset = remember { androidx.compose.animation.core.Animatable(0f) }
     val textBack = remember { androidx.compose.animation.core.Animatable(0f) }
     var launching by remember { androidx.compose.runtime.mutableStateOf(false) }
+    // Lifting the finger and a cancelled touch (e.g. a thumb running into the screen edge, which
+    // Android may report as a cancel) are handled the same way.
+    fun release() {
+                            held = false; leftPull = 0f; finger = 0f // let the spin finish its turn
+                            val wentLeft = offset.value < 0f
+                            if (kotlin.math.abs(offset.value) >= rideDistancePx && !unlocked) { // either direction unlocks
+                                unlocked = true
+                                unlockBuzz(context) // no beep: a short vibration confirms the unlock
+                                if (wentLeft) {
+                                    // Ridden left: it launches back to the right and flies off the screen
+                                    // (the texts stay where the pull left them), then the app opens.
+                                    val past = context.resources.displayMetrics.widthPixels * 1.2f
+                                    scope.launch {
+                                        textBack.snapTo(-offset.value)
+                                        launching = true
+                                        offset.animateTo(past, androidx.compose.animation.core.tween(350, easing = androidx.compose.animation.core.FastOutLinearInEasing))
+                                        kotlinx.coroutines.delay(500) // a moment of empty screen before the app opens
+                                        onUnlock()
+                                    }
+                                } else {
+                                    onUnlock()
+                                    scope.launch { offset.animateTo(0f) }
+                                }
+                            } else {
+                                scope.launch { offset.animateTo(0f) }
+                            }
+                        
+    }
     val ride = remember { org.avmedia.gshockGoogleSync.ui.settings.RideEmoji.get(context) }
     // Dragging the wrong way (left): the bicycle spins, faster the further it is pulled, with a
     // short buzz per full turn; on release it finishes the turn and stops upright.
@@ -77,7 +105,7 @@ private fun RideToUnlock(onUnlock: () -> Unit) {
 
     androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
         // Both texts move left exactly as far as the bicycle moves right (and spring back with it).
-        // While launching after a left ride the texts return home instead of following the ride.
+        // While launching after a left ride the texts stay where the pull left them.
         val counter = Modifier.offset {
             androidx.compose.ui.unit.IntOffset((if (launching) textBack.value else -offset.value).toInt(), 0)
         }
@@ -104,33 +132,8 @@ private fun RideToUnlock(onUnlock: () -> Unit) {
                                     scope.launch { offset.snapTo(accelerated(finger, accelPx)) }
                                 }
                             },
-                            onDragEnd = {
-                                held = false; leftPull = 0f; finger = 0f // let the spin finish its turn
-                                val wentLeft = offset.value < 0f
-                                if (kotlin.math.abs(offset.value) >= rideDistancePx && !unlocked) { // either direction unlocks
-                                    unlocked = true
-                                    unlockBuzz(context) // no beep: a short vibration confirms the unlock
-                                    if (wentLeft) {
-                                        // Ridden left: it launches back to the right and flies off the screen
-                                        // (texts fly off to the left), then the app opens.
-                                        val past = context.resources.displayMetrics.widthPixels * 1.2f
-                                        scope.launch {
-                                            textBack.snapTo(-offset.value)
-                                            launching = true
-                                            launch { textBack.animateTo(0f, androidx.compose.animation.core.tween(350)) }
-                                            offset.animateTo(past, androidx.compose.animation.core.tween(350, easing = androidx.compose.animation.core.FastOutLinearInEasing))
-                                            kotlinx.coroutines.delay(500) // a moment of empty screen before the app opens
-                                            onUnlock()
-                                        }
-                                    } else {
-                                        onUnlock()
-                                        scope.launch { offset.animateTo(0f) }
-                                    }
-                                } else {
-                                    scope.launch { offset.animateTo(0f) }
-                                }
-                            },
-                            onDragCancel = { held = false; leftPull = 0f; finger = 0f; scope.launch { offset.animateTo(0f) } },
+                            onDragEnd = { release() },
+                            onDragCancel = { release() },
                         )
                     },
         ) {
