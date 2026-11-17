@@ -95,7 +95,7 @@ The app works out today's sunset from the phone's location and switches the face
 <img src="docs/screenshots/03_time.png" width="240" align="right" alt="Time tab">
 
 - **Fine Adjustment** — the offset applied whenever the watch's time is set.
-- **Two extra clocks** with their dates.
+- **Extra clocks**, as many as you like, each with its date: *+ Add clock*, tap one to rename it, change its time zone (searchable list of cities) or delete it. They live on the phone; the watch's own world time is not touched.
 - **Timer**.
 - **Watch time format** 12h / 24h — the whole app follows the watch.
 - **Hourly time signal**.
