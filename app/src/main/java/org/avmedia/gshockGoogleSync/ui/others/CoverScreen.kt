@@ -88,7 +88,7 @@ private fun RideToUnlock(onUnlock: () -> Unit) {
                                 if (offset.value <= 0f && (dx < 0f || leftPull > 0f)) {
                                     // Pulling left: mirrors the ride to the right (same acceleration: the
                                     // ride is past the left edge when the finger reaches it, the texts past
-                                    // the right one) and spins, faster the further it is pulled. Never unlocks.
+                                    // the right one) and spins, faster the further it is pulled. Unlocks like the right ride.
                                     held = true
                                     leftPull = (leftPull - dx).coerceAtLeast(0f)
                                     scope.launch { offset.snapTo(-accelerated(leftPull, accelPx)) }
@@ -101,7 +101,7 @@ private fun RideToUnlock(onUnlock: () -> Unit) {
                             },
                             onDragEnd = {
                                 held = false; leftPull = 0f; finger = 0f // let the spin finish its turn
-                                if (offset.value >= rideDistancePx && !unlocked) {
+                                if (kotlin.math.abs(offset.value) >= rideDistancePx && !unlocked) { // either direction unlocks
                                     unlocked = true
                                     unlockBuzz(context) // no beep: a short vibration confirms the unlock
                                     onUnlock()
