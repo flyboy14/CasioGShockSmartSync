@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -137,7 +138,16 @@ fun DisconnectCard(onDisconnect: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AppTextLarge(text = "Watch connection")
-            org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(text = "Disconnect", onClick = { confirm = true })
+            // Subtle red tint: dropping the connection stops alarms, Find Phone and notifications.
+            androidx.compose.material3.Button(
+                onClick = { confirm = true },
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = androidx.compose.ui.graphics.Color(0xFF3F2E2E), // dusty dark rose
+                    contentColor = androidx.compose.ui.graphics.Color(0xFFF2B8B5),   // pastel red
+                ),
+                shape = androidx.compose.foundation.shape.CircleShape,
+                modifier = Modifier.height(36.dp),
+            ) { androidx.compose.material3.Text("Disconnect") }
         }
     }
     if (confirm) {
