@@ -130,8 +130,8 @@ There is no release build; build it yourself. The app compiles against the GShoc
 
 ```
 git clone -b h5600-sound-mode https://github.com/flyboy14/GShockAPI.git
-git clone -b h5600-sound-mode https://github.com/flyboy14/CasioGShockSmartSync.git
-cd CasioGShockSmartSync
+git clone -b h5600-sound-mode https://github.com/flyboy14/GShockSmartass.git
+cd GShockSmartass
 ./gradlew testGithubDebugUnitTest assembleGithubDebug     # JDK 21, Android SDK 37
 adb install -r app/build/outputs/apk/github/debug/app-github-debug.apk
 ```
