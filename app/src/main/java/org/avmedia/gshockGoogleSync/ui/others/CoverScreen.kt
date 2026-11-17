@@ -111,6 +111,7 @@ private fun RideToUnlock(onUnlock: () -> Unit) {
                                         val past = context.resources.displayMetrics.widthPixels * 1.2f
                                         scope.launch {
                                             offset.animateTo(past, androidx.compose.animation.core.tween(350, easing = androidx.compose.animation.core.FastOutLinearInEasing))
+                                            kotlinx.coroutines.delay(500) // a moment of empty screen before the app opens
                                             onUnlock()
                                         }
                                     } else {
