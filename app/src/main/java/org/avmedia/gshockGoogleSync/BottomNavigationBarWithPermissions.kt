@@ -57,6 +57,14 @@ fun BottomNavigationBarWithPermissions(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
+    // Open on the tab used last (after unlocking the cover screen or restarting the app),
+    // not always on the first one.
+    val tabContext = LocalContext.current
+    val startRoute = remember { LastTab.get(tabContext) }
+    LaunchedEffect(currentDestination?.route) {
+        currentDestination?.route?.let { LastTab.set(tabContext, it) }
+    }
+
     val localContext = LocalContext.current.applicationContext
     val appContext = remember {
         EntryPointAccessors.fromApplication(
@@ -144,7 +152,7 @@ fun BottomNavigationBarWithPermissions(
     ) { paddingValues ->
         NavHost(
             navController = navController,
-            startDestination = Screens.Time.route,
+            startDestination = startRoute,
             modifier = Modifier.padding(paddingValues = paddingValues),
             // No tab animations (not even the navigation library's default fade).
             enterTransition = { androidx.compose.animation.EnterTransition.None },
@@ -267,5 +275,22 @@ fun PermissionRequiredScreen(
         } else {
             onPermissionDenied()  // Safe to call @Composable here
         }
+    }
+}
+
+/** The tab the user was on last, so the tab bar reopens there. */
+private object LastTab {
+    private const val KEY = "last_tab_route"
+    private val TABS = setOf(
+        Screens.Time.route, Screens.Health.route, Screens.Alarms.route, Screens.Events.route,
+        Screens.Actions.route, Screens.Custom.route, Screens.Settings.route,
+    )
+
+    fun get(context: android.content.Context): String =
+        org.avmedia.gshockGoogleSync.h5600.H5600Prefs.get(context).getString(KEY, null)
+            ?.takeIf { it in TABS } ?: Screens.Time.route
+
+    fun set(context: android.content.Context, route: String) {
+        if (route in TABS) org.avmedia.gshockGoogleSync.h5600.H5600Prefs.get(context).edit().putString(KEY, route).apply()
     }
 }
