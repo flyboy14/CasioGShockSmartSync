@@ -1,5 +1,7 @@
 package org.avmedia.gshockGoogleSync.ui.time
 
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.graphics.graphicsLayer
 import AppSwitch
 import AppText
 import androidx.compose.foundation.layout.Arrangement
@@ -153,7 +155,7 @@ fun TimeFormatRow(modifier: Modifier = Modifier, vm: TimeFormatViewModel = hiltV
     AppCard(modifier = modifier.padding(horizontal = 8.dp, vertical = 2.dp)) {
         androidx.compose.foundation.layout.Column {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -162,19 +164,23 @@ fun TimeFormatRow(modifier: Modifier = Modifier, vm: TimeFormatViewModel = hiltV
                 org.avmedia.gshockGoogleSync.ui.common.LoadingSpinner() // never read from the watch
             } else Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 // Current format highlighted; greyed only while syncing.
-                AppChoiceButton(text = "12h", selected = s.is24h == false, onClick = { vm.set(false) })
-                AppChoiceButton(text = "24h", selected = s.is24h == true, onClick = { vm.set(true) })
+                AppChoiceButton(text = "12h", selected = s.is24h == false, onClick = { vm.set(false) }, compact = true)
+                AppChoiceButton(text = "24h", selected = s.is24h == true, onClick = { vm.set(true) }, compact = true)
             }
         }
         // Hourly time signal (moved here from the Custom tab)
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AppText(text = "Hourly time signal")
             if (s.hourlyChime == null) org.avmedia.gshockGoogleSync.ui.common.LoadingSpinner()
-            else AppSwitch(checked = s.hourlyChime == true, onCheckedChange = { vm.setHourlyChime(it) })
+            // Scaled down and laid out at its visual size, so the row is as tall as the 12h/24h pills.
+            else AppSwitch(
+                checked = s.hourlyChime == true, onCheckedChange = { vm.setHourlyChime(it) },
+                modifier = Modifier.height(32.dp).graphicsLayer { scaleX = 0.8f; scaleY = 0.8f },
+            )
         }
         }
     }

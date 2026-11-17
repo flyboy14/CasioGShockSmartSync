@@ -62,49 +62,26 @@ fun TimerView(
             .fillMaxWidth()
             .wrapContentHeight()
     ) {
+        // One compact row, like Fine Adjustment: Timer · 00:07:00 (tap to change) · Send
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column(
-                modifier = Modifier
-                    .weight(2f)
-                    .padding(horizontal = 12.dp),
-                verticalArrangement = Arrangement.Center
-            ) {
-                AppTextLarge(
-                    text = stringResource(R.string.timer),
-                    modifier = Modifier.padding(start = 6.dp)
-                )
-                if (!state.loaded) {
-                    // never read from the watch yet
-                    org.avmedia.gshockGoogleSync.ui.common.LoadingSpinner(Modifier.padding(start = 6.dp, top = 12.dp))
-                } else TimerTimeView(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
-                        .clickable { showTimerDialog = true },
-                    timeText = makeLongString(state.timer)
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(0.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                SendTimerButton(
-                    modifier = Modifier.padding(0.dp),
-                    onClick = {
-                        timeModel.onAction(TimeAction.UpdateTimer(state.timer))
-                    },
-                    enabled = isTimerModified
-                )
-            }
+            AppTextLarge(text = stringResource(R.string.timer), modifier = Modifier.weight(1f))
+            if (!state.loaded) {
+                org.avmedia.gshockGoogleSync.ui.common.LoadingSpinner() // never read from the watch yet
+            } else TimerTimeView(
+                modifier = Modifier.clickable { showTimerDialog = true },
+                timeText = makeLongString(state.timer)
+            )
+            org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(
+                text = "Send",
+                onClick = { timeModel.onAction(TimeAction.UpdateTimer(state.timer)) },
+                enabled = isTimerModified,
+            )
         }
     }
 
@@ -130,9 +107,10 @@ fun TimerView(
 
 @Composable
 fun TimerTimeView(modifier: Modifier = Modifier, timeText: String) {
-    AppTextExtraLarge(
+    AppTextLarge(
         text = timeText,
         modifier = modifier,
+        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline, // tappable, like Fine Adjustment
     )
 }
 
