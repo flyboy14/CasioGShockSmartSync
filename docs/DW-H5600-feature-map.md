@@ -13,7 +13,7 @@ Status: **Have** = already in the fork · **Ready** = layout known and the watch
 | Feature | Packet | Fields (CASIO names) | Our watch now | Status |
 |---|---|---|---|---|
 | Heart-rate monitor mode | `0x41` | byte1 bits0-1 `monitoringCondition` (0 Off, 1 RunActOnly, 2 AlwaysOn) | `41 01 00 00 00` | **Have** (Settings tab) |
-| HR zone alert during activity | `0x41` | byte1 bit2 `enabledInRangeNotification`, bit3 `useTarget` (inverted), bit4 `enabledAlert`; byte2 `selectedTarget`; bytes3/4 plan min/max HR | off | **Have** (Settings tab; zone 1-5 = byte 2) |
+| HR zone alert during activity | `0x41` | byte1 bits 2-4, byte2 zone | – | **Not supported**: the DW-H5600 accepts the write but keeps only bits 0-1 (tested 2026-11-17) |
 | Daily step goal (+ "goal reached" notification) | `0x43` | `steps` (u16 LE, `10 27` = 10000), `enabledNotifyDailyStepsAchievemnet`, `dailyDistance`, `runDistance`, `runningTime`, `elevationGain`, `monthlyWatchFace` | 10000 steps | **Have** (bytes 1-3 LE, notify = byte 16 bit 0x01) |
 | User profile | `0x45` | `birthYear/Month/Day`, `height`, `weight` | `45 02 87 fe …` | Partly (encoding looks packed) |
 | Sleep schedule, max/resting HR, VO2max | `0x4F` | `preferedSleepTime…` (23:00 → 08:20), `maxmumHeartRate` (0xBE = 190), `restingHeartRate` (0x37 = 55), `vo2Max` (0x35 = 53), use-value flags, `trainingBackground` | `4F 02 17 00 08 14 00 BE 37 35` | **Have** (sleep time, max/resting HR; VO2max shown) |
@@ -27,7 +27,8 @@ Status: **Have** = already in the fork · **Ready** = layout known and the watch
 | Watch face 1/2 + face-2 item | `0x51` | `customizeFace1`, item codes | **Have** |
 | Mode (widget) list: order and visibility of watch screens | `0x52` | list of mode IDs (izivkov's watch: `09 02 0A 08 0E 0F 10 11 07 03 05 06`) | Partly (ID→name map in the app's `widget_view`) |
 | Activity types on the watch (run, walk, gym, …) | `0x53` | list of activity IDs (ours: `02 0E`) | Partly |
-| Main font, date order, weekday language, 12/24h | `0x13` | `font` (byte 8 bit 0x20: 0 Squad, 1 7-segment), `dateOrder` (byte 4: YMD, YDM, MDY, DMY), `weekLanguage` (byte 5: EN, ES, FR, DE, IT, RU), `isSet24H` | **Have** |
+| Main font, date order, weekday language | `0x13` | `font`, `dateOrder`, `weekLanguage` | **Not supported**: written, but the DW-H5600 reads back 0 (tested 2026-11-17) |
+| 12/24h | `0x13` | `isSet24H` | **Have** |
 | Units (km/mile, °C/°F) | `0x2F` | `useMileForGps`, `useFahrenheitForTemp`, … (ours `2F 0C 04 00 00 00`) | Partly |
 
 ## Sound, light, notifications
@@ -39,7 +40,7 @@ Status: **Have** = already in the fork · **Ready** = layout known and the watch
 | Button tone, operation vibration | `0x13` | `enabledKeySound`, `enabledOperationVibration`, `buttonBeepVibe` | Ready |
 | Auto light, light duration | `0x13` | `enabledAutoLight`, `lightTime` | Have (stock Settings cards) |
 | Hourly time signal | `0x13` | `timeSignal` | **Have** |
-| Night time (quiet hours) | `0x13` bytes 13-16 | `nightTimeStart/EndHour/Min` (ours 23:00 → 08:20) | **Have** (Night time card, also writes the 0x4F sleep time) |
+| Night time (quiet hours) | `0x13` bytes 13-16 | `nightTimeStart/EndHour/Min` (ours 23:00 → 08:20) | **Have** (Night time card, also writes the 0x4F sleep time; tested) |
 | Mute notifications at night, notification text size, language | `0x3D` | `settingForTurningOffNotificationWithNight`, `popupSize`, `languageSetting…` | Partly |
 | Power saving | `0x13` | `enabledPowerSaving` | Have (stock card) |
 

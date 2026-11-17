@@ -47,11 +47,10 @@ class H5600ViewModel @Inject constructor(
         val faceLeadMin: Int = SunFace.DEFAULT_LEAD_MIN,
         val lastApplied: String? = null,
         val hrMonitorCode: Int? = null, // 0x41 byte 1 (raw, see HeartRateMonitor)
-        // Settings tab (read by refreshSettings): 0x13 display/night, 0x4F physical, 0x43 goal, 0x41 zone alert
+        // Settings / Sport tabs (read by refreshSettings): 0x13 night time, 0x4F physical, 0x43 goal
         val basic: org.avmedia.gshockapi.model.H5600Basic? = null,
         val physical: org.avmedia.gshockapi.model.H5600Physical? = null,
         val stepGoal: org.avmedia.gshockapi.model.StepGoal? = null,
-        val zoneAlert: org.avmedia.gshockapi.model.HeartRateZoneAlert? = null,
     ) {
         val hrMonitor: HeartRateMonitor? get() = hrMonitorCode?.let(HeartRateMonitor::fromCode)
     }
@@ -225,12 +224,11 @@ class H5600ViewModel @Inject constructor(
             val basic = readOrNull { api.getH5600Basic() }
             val physical = readOrNull { api.getH5600Physical() }
             val goal = readOrNull { api.getH5600StepGoal() }
-            val zone = readOrNull { api.getH5600HeartRateZoneAlert() }
             val hr = readOrNull { api.getH5600HeartRateMonitorCode() }
             _state.update {
                 it.copy(
                     basic = basic ?: it.basic, physical = physical ?: it.physical,
-                    stepGoal = goal ?: it.stepGoal, zoneAlert = zone ?: it.zoneAlert,
+                    stepGoal = goal ?: it.stepGoal,
                     hrMonitorCode = hr ?: it.hrMonitorCode,
                 )
             }
@@ -246,11 +244,6 @@ class H5600ViewModel @Inject constructor(
             kotlinx.coroutines.delay(700)
             run(what, onError = { refreshSettings() }, block = block)
         }
-    }
-
-    fun setBasic(v: org.avmedia.gshockapi.model.H5600Basic) {
-        _state.update { it.copy(basic = v) }
-        debouncedWrite("basic", "display settings") { api.setH5600Basic(v) }
     }
 
     fun setPhysical(v: org.avmedia.gshockapi.model.H5600Physical) {
@@ -279,11 +272,6 @@ class H5600ViewModel @Inject constructor(
         debouncedWrite("goal", "step goal") { api.setH5600StepGoal(g) }
     }
 
-    fun setZoneAlert(a: org.avmedia.gshockapi.model.HeartRateZoneAlert) {
-        _state.update { it.copy(zoneAlert = a) }
-        debouncedWrite("zone", "heart-rate zone alert") { api.setH5600HeartRateZoneAlert(a) }
-    }
-
     /** Sets the heart-rate monitor mode (0x41) and confirms it from the watch. */
     fun setHeartRateMonitor(mode: HeartRateMonitor) {
         val previous = _state.value.hrMonitorCode
@@ -309,9 +297,17 @@ class H5600ViewModel @Inject constructor(
         H5600Prefs.get(context).getInt(KEY_HR_BEFORE_ALL_DAY, -1).let(HeartRateMonitor::fromCode)
             ?.takeIf { it != HeartRateMonitor.ALL_DAY } ?: HeartRateMonitor.ACTIVITY_AND_NIGHT
 
-    /** Watch-face item, then (if the user agreed in the dialog) the heart-rate monitor mode. */
-    fun setWatchFace(item: WatchFaceItem, hrMode: HeartRateMonitor?) {
-        setWatchFace(item)
+    /**
+     * Face-2 item choice: [item] null = Auto (Steps / Sun data around sunset, driven by the phone),
+     * otherwise a fixed item (Auto is switched off). Then, if the user agreed in the HR dialog, the
+     * heart-rate monitor mode.
+     */
+    fun selectFace(item: WatchFaceItem?, hrMode: HeartRateMonitor?) {
+        if (item == null) setDynamicFace(true)
+        else {
+            if (_state.value.dynamicFace) setDynamicFace(false)
+            setWatchFace(item)
+        }
         if (hrMode != null) setHeartRateMonitor(hrMode)
     }
 

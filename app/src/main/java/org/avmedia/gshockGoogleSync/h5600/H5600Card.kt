@@ -150,17 +150,20 @@ private fun WatchFaceCard(vm: H5600ViewModel) {
     // HR on the face needs all-day monitoring: ask before turning it on, and before turning it off
     // when HR leaves the face. The face changes either way; Cancel / tapping outside changes nothing.
     var hrAsk by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<HrAsk?>(null) }
-    val onFaceItem: (WatchFaceItem) -> Unit = { item ->
-        val wasHr = s.watchFace in H5600ViewModel.HR_ITEMS
+    // item null = Auto (Steps by day, Sun data around sunset; see SunFace).
+    val current: WatchFaceItem? = if (s.dynamicFace) null else s.watchFace
+    val onFaceItem: (WatchFaceItem?) -> Unit = { item ->
+        val unchanged = if (item == null) s.dynamicFace else !s.dynamicFace && item == s.watchFace
+        val wasHr = !s.dynamicFace && s.watchFace in H5600ViewModel.HR_ITEMS
         val isHr = item in H5600ViewModel.HR_ITEMS
         val allDay = s.hrMonitor == org.avmedia.gshockapi.model.HeartRateMonitor.ALL_DAY
         hrAsk = when {
-            item == s.watchFace -> null
+            unchanged -> null
             isHr && !wasHr && !allDay -> HrAsk(item, turnOn = true)
             !isHr && wasHr && (allDay || s.hrMonitorCode == null) -> HrAsk(item, turnOn = false)
             else -> null
         }
-        if (hrAsk == null && item != s.watchFace) vm.setWatchFace(item)
+        if (hrAsk == null && !unchanged) vm.selectFace(item, null)
     }
     hrAsk?.let { ask ->
         val off = vm.hrModeWhenOff()
@@ -182,13 +185,13 @@ private fun WatchFaceCard(vm: H5600ViewModel) {
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
                     hrAsk = null
-                    vm.setWatchFace(ask.item, if (ask.turnOn) org.avmedia.gshockapi.model.HeartRateMonitor.ALL_DAY else off)
+                    vm.selectFace(ask.item, if (ask.turnOn) org.avmedia.gshockapi.model.HeartRateMonitor.ALL_DAY else off)
                 }) { androidx.compose.material3.Text(if (ask.turnOn) "Turn on" else "Turn off") }
             },
             dismissButton = {
                 androidx.compose.material3.TextButton(onClick = {
                     hrAsk = null
-                    vm.setWatchFace(ask.item, null)
+                    vm.selectFace(ask.item, null)
                 }) { androidx.compose.material3.Text(if (ask.turnOn) "Keep off" else "Keep on") }
             },
         )
@@ -218,47 +221,37 @@ private fun WatchFaceCard(vm: H5600ViewModel) {
                         onClick = { vm.setFaceNumber(2) })
                 }
             }
-            val faceLabels = listOf(
+            val faceLabels = listOf<Pair<WatchFaceItem?, String>>(
+                null to "Auto: Steps/Sun",
                 WatchFaceItem.SUNRISE_SUNSET to "Sun", WatchFaceItem.STEPS to "Steps", WatchFaceItem.MOON to "Moon",
                 WatchFaceItem.HEART_RATE to "Heart rate", WatchFaceItem.SLEEP to "Sleep",
             )
             AppText(
-                text = (if (s.faceNumber == 1) "Face 2 item (not shown on face 1): " else "Face 2 item: ") + (faceLabels.firstOrNull { it.first == s.watchFace }?.second
+                text = (if (s.faceNumber == 1) "Face 2 item (not shown on face 1): " else "Face 2 item: ") +
+                    (if (s.dynamicFace) "Auto, now " else "") + (faceLabels.firstOrNull { it.first != null && it.first == s.watchFace }?.second
                     ?: s.watchFace?.name?.lowercase()?.replace('_', ' ')
                     ?: s.watchFaceCode?.let { "unknown (code 0x%02X)".format(it) } ?: "unknown"),
                 modifier = Modifier.padding(top = 8.dp),
             )
-            // Current item highlighted; greyed while syncing or while the dynamic toggle controls it.
+            // Current choice highlighted (Auto = the phone switches Steps / Sun data around sunset).
             if (s.watchFace == null && s.watchFaceCode == null) org.avmedia.gshockGoogleSync.ui.common.LoadingSpinner()
             else faceLabels.chunked(3).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     row.forEach { (item, label) ->
                         AppChoiceButton(
                             text = label,
-                            selected = s.watchFace == item,
-                            enabled = !s.dynamicFace,
+                            selected = current == item && (item != null || s.dynamicFace),
                             onClick = { onFaceItem(item) },
                         )
                     }
                 }
             }
-            if (s.dynamicFace) {
-                AppText(text = "Controlled by the dynamic sunset-step toggle below.", fontSize = 13.sp)
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AppText(text = "Dynamic sunset-step toggle")
-                AppSwitch(checked = s.dynamicFace, onCheckedChange = { vm.setDynamicFace(it) })
-            }
-            AppText(
+            if (s.dynamicFace) AppText(
                 text = "Steps all day; Sun data from ${SunFace.formatLead(s.faceLeadMin)} before sunset until " +
                     "${SunFace.TRAIL_MIN} min after. Today: ${s.sunsetText}",
                 fontSize = 13.sp,
             )
-            Row(
+            if (s.dynamicFace) Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
@@ -403,7 +396,7 @@ private fun SoundNotificationsCard(vm: H5600ViewModel) {
     }
 }
 
-private data class HrAsk(val item: WatchFaceItem, val turnOn: Boolean)
+private data class HrAsk(val item: WatchFaceItem?, val turnOn: Boolean) // item null = Auto
 
 private fun hrModeLabel(m: org.avmedia.gshockapi.model.HeartRateMonitor): String = when (m) {
     org.avmedia.gshockapi.model.HeartRateMonitor.ALL_DAY -> "All day"

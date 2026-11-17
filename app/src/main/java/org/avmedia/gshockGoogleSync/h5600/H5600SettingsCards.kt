@@ -3,6 +3,7 @@ package org.avmedia.gshockGoogleSync.h5600
 import AppSwitch
 import AppText
 import AppTextLarge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -27,12 +29,10 @@ import org.avmedia.gshockGoogleSync.ui.common.AppChoiceButton
 import org.avmedia.gshockGoogleSync.ui.common.AppSmallButton
 import org.avmedia.gshockGoogleSync.ui.common.LoadingSpinner
 import org.avmedia.gshockGoogleSync.utils.AppTimeFormat
-import org.avmedia.gshockapi.model.DateOrder
-import org.avmedia.gshockapi.model.WeekLanguage
 
 /**
  * DW-H5600 settings decoded from the CASIO WATCHES app (2026-11-17): heart rate, step goal,
- * night time, display. Each change is written right away (quick +/- taps are batched).
+ * night time. Each change is written right away (quick +/- taps are batched).
  */
 @Composable
 fun H5600SettingsCards(vm: H5600ViewModel = hiltViewModel()) {
@@ -40,7 +40,6 @@ fun H5600SettingsCards(vm: H5600ViewModel = hiltViewModel()) {
     if (!s.supported) return
     LaunchedEffect(Unit) { vm.refreshSettings() }
     NightTimeCard(vm)
-    DisplayCard(vm)
 }
 
 /** "Sport" tab: heart-rate monitor, zone alert, heart-rate values, step goal. Pull down to re-read. */
@@ -123,30 +122,10 @@ private fun <T> Choices(options: List<Pair<T, String>>, selected: T?, perRow: In
     }
 }
 
-/** HR zone alert (0x41) and max / resting heart rate (0x4F). */
+/** Max / resting heart rate (0x4F). (The DW-H5600 ignores the 0x41 zone-alert bits: tested 2026-11-17.) */
 @Composable
 private fun HeartRateExtrasCard(vm: H5600ViewModel) {
     val s by vm.state.collectAsState()
-    SettingsCard("Heart-rate zone alert") {
-        val z = s.zoneAlert
-        val p = s.physical
-        if (z == null) { LoadingSpinner(); return@SettingsCard }
-        AppText(
-            text = "During activities the watch alerts you when your heart rate leaves the chosen zone.",
-            fontSize = 13.sp,
-        )
-        SwitchRow("Zone alert", z.enabled) { vm.setZoneAlert(z.copy(enabled = it)) }
-        if (z.enabled) {
-            // Zones as % of max heart rate (standard 5-zone model); bpm shown from the watch's max HR.
-            val pct = listOf(50 to 60, 60 to 70, 70 to 80, 80 to 90, 90 to 100)
-            Choices((1..5).map { it to "Zone $it" }, z.zone, 3) { vm.setZoneAlert(z.copy(zone = it)) }
-            p?.let {
-                val (lo, hi) = pct[z.zone - 1]
-                AppText(text = "≈ ${it.maxHr * lo / 100}–${it.maxHr * hi / 100} bpm ($lo–$hi % of max HR)", fontSize = 13.sp)
-            }
-            SwitchRow("Also notify when back in the zone", z.notifyInRange) { vm.setZoneAlert(z.copy(notifyInRange = it)) }
-        }
-    }
     SettingsCard("Heart-rate values") {
         val p = s.physical
         if (p == null) { LoadingSpinner(); return@SettingsCard }
@@ -205,7 +184,12 @@ private fun NightTimeCard(vm: H5600ViewModel) {
                 p.wakeHour != b.nightEndHour || p.wakeMin != b.nightEndMin
             ) AppText(text = "Sleep time on the watch differs: ${fmt(p.sleepStartHour, p.sleepStartMin)}–${fmt(p.wakeHour, p.wakeMin)} (saving sets both)", fontSize = 12.sp)
         }
-        picking?.let { start ->
+        picking?.let { start -> androidx.compose.ui.window.Dialog(onDismissRequest = { picking = null }) {
+          androidx.compose.foundation.layout.Box(
+            modifier = Modifier
+                .background(androidx.compose.material3.MaterialTheme.colorScheme.background)
+                .padding(16.dp),
+          ) {
             org.avmedia.gshockGoogleSync.ui.common.AppTimePicker(
                 onConfirm = { t ->
                     picking = null
@@ -216,22 +200,7 @@ private fun NightTimeCard(vm: H5600ViewModel) {
                 initialHour = if (start) b.nightStartHour else b.nightEndHour,
                 initialMinute = if (start) b.nightStartMin else b.nightEndMin,
             )
-        }
-    }
-}
-
-/** Date order, weekday language and font (0x13). */
-@Composable
-private fun DisplayCard(vm: H5600ViewModel) {
-    val s by vm.state.collectAsState()
-    SettingsCard("Display") {
-        val b = s.basic
-        if (b == null) { LoadingSpinner(); return@SettingsCard }
-        AppText(text = "Date order", modifier = Modifier.padding(top = 4.dp))
-        Choices(DateOrder.entries.map { it.code to it.label }, b.dateOrder, 2) { vm.setBasic(b.copy(dateOrder = it)) }
-        AppText(text = "Weekday language", modifier = Modifier.padding(top = 8.dp))
-        Choices(WeekLanguage.entries.map { it.code to it.label }, b.weekLanguage, 3) { vm.setBasic(b.copy(weekLanguage = it)) }
-        AppText(text = "Digit font", modifier = Modifier.padding(top = 8.dp))
-        Choices(listOf(false to "Squad", true to "7-segment"), b.sevenSegmentFont, 2) { vm.setBasic(b.copy(sevenSegmentFont = it)) }
+          }
+        } }
     }
 }
