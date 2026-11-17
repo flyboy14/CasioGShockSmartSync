@@ -47,6 +47,10 @@ private fun RideToUnlock(onUnlock: () -> Unit) {
     var leftPull by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     // Finger distance to the right; the content moves further than the finger (see accelerated()).
     var finger by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    // Where the drag has put the ride, updated synchronously with each finger move. Decisions on
+    // release use this, not offset.value: the snapTo() calls are launched and may still be queued
+    // when the finger lifts (fast thumb), and used to run after the reset, snapping to the middle.
+    var dragPos by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     val accelPx = with(density) { ACCEL.toPx() }
     var held by remember { androidx.compose.runtime.mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -79,8 +83,10 @@ private fun RideToUnlock(onUnlock: () -> Unit) {
     // Android may report as a cancel) are handled the same way.
     fun release() {
                             held = false; leftPull = 0f; finger = 0f // let the spin finish its turn
-                            val wentLeft = offset.value < 0f
-                            if (kotlin.math.abs(offset.value) >= rideDistancePx && !unlocked) { // either direction unlocks
+                            val pos = dragPos // where the finger left it (offset.value may lag behind)
+                            dragPos = 0f
+                            val wentLeft = pos < 0f
+                            if (kotlin.math.abs(pos) >= rideDistancePx && !unlocked) { // either direction unlocks
                                 unlocked = true
                                 unlockBuzz(context) // no beep: a short vibration confirms the unlock
                                 if (wentLeft) {
@@ -88,7 +94,7 @@ private fun RideToUnlock(onUnlock: () -> Unit) {
                                     // (the texts stay where the pull left them), then the app opens.
                                     val past = context.resources.displayMetrics.widthPixels * 1.2f
                                     scope.launch {
-                                        textBack.snapTo(-offset.value)
+                                        textBack.snapTo(-pos)
                                         launching = true
                                         offset.animateTo(past, androidx.compose.animation.core.tween(350, easing = androidx.compose.animation.core.FastOutLinearInEasing))
                                         kotlinx.coroutines.delay(500) // a moment of empty screen before the app opens
@@ -118,18 +124,22 @@ private fun RideToUnlock(onUnlock: () -> Unit) {
                         detectHorizontalDragGestures(
                             onHorizontalDrag = { change, dx ->
                                 change.consume()
-                                if (offset.value <= 0f && (dx < 0f || leftPull > 0f)) {
+                                if (dragPos <= 0f && (dx < 0f || leftPull > 0f)) {
                                     // Pulling left: mirrors the ride to the right (same acceleration: the
                                     // ride is past the left edge when the finger reaches it, the texts past
                                     // the right one) and spins, faster the further it is pulled. Unlocks like the right ride.
                                     held = true
                                     leftPull = (leftPull - dx).coerceAtLeast(0f)
-                                    scope.launch { offset.snapTo(-accelerated(leftPull, accelPx)) }
+                                    val target = -accelerated(leftPull, accelPx) // computed now, not when the launch runs
+                                    dragPos = target
+                                    scope.launch { offset.snapTo(target) }
                                 } else {
                                     leftPull = 0f
                                     finger = (finger + dx).coerceAtLeast(0f)
                                     // No upper limit, and accelerated: past the screen edge before the finger is.
-                                    scope.launch { offset.snapTo(accelerated(finger, accelPx)) }
+                                    val target = accelerated(finger, accelPx) // computed now, not when the launch runs
+                                    dragPos = target
+                                    scope.launch { offset.snapTo(target) }
                                 }
                             },
                             onDragEnd = { release() },
