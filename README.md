@@ -1,233 +1,152 @@
-# Casio G-Shock Smart Sync
+# GShock Smart Ass
+
+**Arthur Dent's unofficial fork of [G-Shock Smart Sync](https://github.com/izivkov/CasioGShockSmartSync), built specifically for the Casio G-SHOCK DW-H5600.**
+
+The upstream app talks to dozens of Casio watches. This fork talks to one, and goes much further with it: it treats the DW-H5600 as an always-connected companion and moves into the phone everything the watch cannot do on its own — unlimited alarms, per-alarm sound and days, a snooze the phone can stop, a watch face that follows the sunset, the weather on the sun screen, and step history.
+
+It is not affiliated with Casio or with the upstream project. It has only been tested with one DW-H5600 (module 3516) on one Pixel; other watches will connect but get none of the extras.
 
 <p align="center">
-  <a href="https://f-droid.org/en/packages/org.avmedia.gshockGoogleSync/"><img src="https://img.shields.io/badge/F--Droid-Available-brightgreen" alt="F-Droid"></a>
-  <a href="https://play.google.com/store/apps/details?id=org.avmedia.gshockGoogleSync"><img src="https://img.shields.io/badge/Google%20Play-Get%20it%20on-blue?logo=google-play&logoColor=white" alt="Google Play"></a>
-  <a href="https://github.com/izivkov/CasioGShockSmartSync"><img src="https://img.shields.io/badge/GitHub-Source-blue" alt="GitHub"></a>
-  <a href="https://github.com/izivkov/CasioGShockSmartSync/releases"><img src="https://img.shields.io/badge/version-42.9.11-blue" alt="Version"></a>
-  <a href="#"><img src="https://img.shields.io/badge/Connection-Fast-green" alt="Connection Speed"></a>
+  <img src="docs/screenshots/01_cover.png" width="220" alt="Cover screen: Ride to unlock">
+  <img src="docs/screenshots/03_time.png" width="220" alt="Time tab">
+  <img src="docs/screenshots/05_alarms.png" width="220" alt="Alarms tab">
 </p>
 
-**G-Shock Smart Sync** is an unofficial, open-source Android app for G-Shock, Edifice, and Pro Trek watches. It allows you to control your watch, sync data, and configure settings **without a Casio ID**.
-
-It offers a faster, privacy-focused, and more powerful alternative to the official Casio app.
-
 ---
 
-## Key Features
+## What it does
 
-- **No Account Required**: Skip the Casio ID login entirely.
-- **Voice Control**: Manage alarms, timers, settings, and reminders using natural language commands.
-- **Calendar Sync**: Push your calendar events (Google, Samsung, etc.) to your watch as reminders.
-- **Auto Timezone**: Automatically adjusts watch time when you travel.
-- **Remote Control**: Use your watch buttons to take photos, control music, or launch voice assistants.
-- **Alarm & Timer Sync**: Configure watch alarms and timers easily from your phone.
-- **Phone Finder**: Trigger a loud alarm on your phone to find it.
-- **Health Integration**: View step counts and fitness metrics for supported models.
+### Alarms — as many as you like
 
----
+<img src="docs/screenshots/05_alarms.png" width="240" align="right" alt="Alarms tab">
 
-## Supported Watch Models
+The DW-H5600 has four alarm slots and one smart-alarm slot. This app keeps an unlimited list on the phone and loads the alarms due in the next 24 hours into the watch, swapping them as they ring (cards marked *on watch*).
 
-The app works with many Bluetooth-enabled G-Shock, Edifice, and Pro Trek models.
+Each alarm has:
+
+- a **label** (phone only — the watch has no alarm names)
+- **repeat**: *Once*, every day, Mon–Fri, weekends or any set of days
+- **Sound + vibe** or **Vibe only** — the watch's single sound mode is switched for the alarm that is due next
+- **snooze** on/off
+- **smart wake**: ring up to 15/30/45/60 minutes early, in light sleep
+
+A **one-time** alarm switches itself off after it has rung (and finished snoozing), and is set again for its next time when you switch it back on.
+
+Hold an alarm and drag it to reorder the list; new alarms go to the top. Edits show instantly on the phone and reach the watch in the background (merged and queued, retried if the watch does not answer).
+
+<br clear="right">
+
+<img src="docs/screenshots/06_alarm_editor.png" width="240" align="left" alt="Alarm editor">
+
+**One editor for everything.** Tap *+ Add alarm* or any alarm card; all options are set before anything is sent, so the watch gets a single update.
+
+**Snooze you can stop from the phone.** The watch does not tell the phone whether an alarm is snoozing, so after an alarm with snooze rings the phone shows a *may be snoozing — Stop snooze* notification (and a button on the card). Stopping cancels the snooze on the watch. The app also avoids its own time syncs and alarm rewrites during a snooze window — both cancel a running snooze on the watch.
+
+<br clear="left">
+
+### Custom — the DW-H5600's own features
 
 <p align="center">
-  <img src="images/gw_b5600.png" width="150" alt="GW-B5600" style="margin: 10px;">
-  <img src="images/ga_b2100.png" width="150" alt="GA-B2100" style="margin: 10px;">
-  <img src="images/dw-b5600.png" width="150" alt="DW-B5600" style="margin: 10px;">
-  <img src="images/ecb_30d.png" width="150" alt="ECB-30" style="margin: 10px;">
+  <img src="docs/screenshots/07_custom_1.png" width="220" alt="Custom tab: watch face and sun">
+  <img src="docs/screenshots/08_custom_2.png" width="220" alt="Custom tab: sound and notifications">
+  <img src="docs/screenshots/09_custom_3.png" width="220" alt="Custom tab: Find Phone, greeting and ride">
 </p>
 
-| Series | Compatible Models (Examples) | Note |
-|:---|:---|:---|
-| **Square** | GW-B5600, GMW-B5000, GW-B5000, DW-B5600, TRN-50 | Classic square design support |
-| **CasiOak** | GA-B2100, GBM-2100, GMC-B2100, MRG-B2100 | Octagonal bezel models |
-| **G-Steel** | GST-B100 to B1000, GST-W1000, ECB-900 | Metal series |
-| **Edifice** | ECB-10 to ECB-2300, EQB-500 to EQB-2000 | Bluetooth Edifice series |
-| **MT-G / MR-G** | MTG-B1000/B3000/B3100, MRG-B5000/B2100 | Premium metal and carbon models |
-| **Others** | ABL-100WE, GBD-100/200, GBD-H1000/H2000, GPR-B1000 | Step trackers, GPS, and sensors |
+- **Watch face** — Face 1 (weekday) or Face 2 with its item: Sun, Steps, Moon, Heart rate, Sleep.
+- **Dynamic sunset-step toggle** — Steps all day, the Sun screen from four hours before sunset until ten minutes after.
+- **Weather instead of sunrise** — the sun screen's top line shows `W:TT` (weather 1 sunny / 2 cloudy / 3 rain / 4 extreme, temperature in °C) from Open-Meteo, while the sunset stays real. It works by sending the watch coordinates solved with its own sun formula; fine-tune buttons correct the last minute.
+- **Real today** — real sunrise and sunset, the current weather, and what the watch should be showing.
+- **Sound mode** — Sound + vibe, Sound only, Vibe only, Off, Custom.
+- **Notifications only from chosen apps** — a per-app allowlist for what reaches the watch.
+- **Find Phone** — pick the ring sound and volume, vibrate too, test it. Pressing Find Phone on the watch rings the phone at once (the watch stays connected, so there is no reconnect wait); pressing *back* on the watch stops it.
+- **Start screen greeting** and **What are we riding?** — see *The fun bits* below.
+
+### Time
+
+<img src="docs/screenshots/03_time.png" width="240" align="right" alt="Time tab">
+
+- **Fine Adjustment** — the offset applied whenever the watch's time is set.
+- **Two extra clocks** with their dates.
+- **Timer**.
+- **Watch time format** 12h / 24h — the whole app follows the watch.
+- **Hourly time signal**.
+- **Home time** and the **watch sensor** temperature (it reads body heat, not the weather).
+- **Battery** as the watch shows it: four bars. The watch reports a level, not a percentage; tap the battery to tell the app how many bars the watch shows for the current level.
+
+<br clear="right">
+
+### Health
+
+<img src="docs/screenshots/04_health.png" width="240" align="left" alt="Health tab">
+
+Steps from the watch's LifeLog: today's total, the goal, distance, calories and an hourly breakdown.
+
+A full LifeLog transfer takes a few minutes — the watch sends its history in small pieces and keeps answering "busy" — so the app saves the last result on the phone and shows today's numbers immediately, with *Synced at …*, while a new sync runs in the background. Pull down to sync now.
+
+<br clear="left">
+
+### Settings
+
+<img src="docs/screenshots/10_settings.png" width="240" align="right" alt="Settings tab">
+
+Button tone and vibration, auto light, illumination period, power saving — each change is written to the watch straight away (no *Send* button), on top of a fresh read so nothing else on the watch is touched.
+
+**Disconnect** drops the connection after a confirmation; the watch reconnects the usual way (its connect button).
+
+<br clear="right">
+
+### The fun bits
+
+<p align="center">
+  <img src="docs/screenshots/01_cover.png" width="220" alt="Cover screen">
+  <img src="docs/screenshots/02_start_screen.png" width="220" alt="Start screen with greeting">
+  <img src="docs/screenshots/11_pull_up_to_lock.png" width="220" alt="Pull up to lock">
+</p>
+
+- **Ride to unlock.** The app opens on a cover screen: drag the ride sideways to get in. It accelerates past your finger; pulled left it spins (faster the further you pull) and, released, launches off the right edge before the app opens.
+- **What are we riding?** — any text up to 14 characters, emoji welcome. 🚲 by default.
+- **Pull up to lock** — on any tab already at the bottom, keep pulling up: a lock appears above the tab bar, release to lock. Or use the *Lock* button.
+- **Start screen greeting** — shown while the app waits for the watch, optionally as a stepping LED ticker. Tap *Connected* on the cover to see it.
+- The app reopens on the tab you used last, and stays upright (portrait only).
 
 ---
 
-## App Walkthrough
+## Under the hood
 
-Here is a guide to the main screens of the application.
+The watch stays connected all day (the app repeats the official app's `0x39` handshake), and a scheduler on the phone does the watch's planning:
 
-### 1. Connection Screen
+- when an alarm time passes: reload the alarm slots, the smart slot and the sound mode, switch finished one-time alarms off
+- at the edges of the sunset window: switch the watch face
+- every quarter hour: refresh the sun data or the weather (a location and time sync — the watch only recalculates its sun times on a time write)
+- on every connection: one location and time sync
 
-<img src="images/mainscreen-b5600.png" width="200" align="right" style="margin-left: 20px;">
+It wakes itself with exact Android alarms, so this keeps working while the phone dozes overnight. Requests to the watch are shared between screens, retried when the watch does not answer and serialized per setting, so two quick changes cannot undo each other.
 
-This is the first screen you see. It handles the Bluetooth connection to your watch.
+The protocol details found along the way (sound mode `0x42`, watch face `0x51`, smart alarm `0x50`, home location `0x24`, battery level, LifeLog, …) are written up in the [GShockAPI fork](https://github.com/flyboy14/GShockAPI/tree/h5600-sound-mode) in `docs/DW-H5600-protocol.md`. More notes for this app: [`docs/DW-H5600.md`](docs/DW-H5600.md).
 
-- **Status**: Shows generic connection status.
-- **Scan/Connect**: Automatically scans for your watch.
-- **Paired Devices**: Lists your previously connected watches for quick access.
+## Building and installing
 
-The app communicates directly with the watch via BLE. Connection is typically much faster than the official app (~3.5s vs 12s).
+There is no release build; build it yourself. The app compiles against the GShockAPI fork from source, so clone both side by side:
 
-<br clear="all"/>
-
-### 2. Time Setting & Voice Control
-
-<img src="images/TimeScreen.png" width="200" align="right" style="margin-left: 20px;">
-
-Manage your watch's timekeeping and control features via voice.
-
-- **Voice Control**: Tap the microphone icon on the watch name card to issue voice commands. 
-    - Say *"Help"* for a full list of supported commands.
-    - Examples: *"Set alarm at 7:30 am"*, *"Set timer for 5 minutes"*, *"Disable all alarms"*, *"Reset settings"*.
-- **Local Time**: Displays the current time from your phone.
-- **Send to Watch**: Tap the button to sync your phone's time, timezone, and DST settings to the watch immediately.
-- **Battery & Temp**: Displays the current battery level and temperature reported by the watch.
-
-<br clear="all"/>
-
-### 3. Alarms
-
-<img src="images/AlarmsScreen.png" width="200" align="right" style="margin-left: 20px;">
-
-Read and configure the alarms stored on your watch.
-
-- **View Alarms**: See the current settings for all 5 alarms and the hourly signal (Chime).
-- **Edit**: Tap any alarm to change its time.
-- **Sync**: You can send these alarm settings to the watch. 
-
-*Note: Due to Android limitations, we cannot read alarms set in your phone's native Clock app, but we can set the watch's internal alarms.*
-
-<br clear="all"/>
-
-### 4. Events (Calendar & Reminders)
-
-<img src="images/EventsScreen.png" width="200" align="right" style="margin-left: 20px;">
-
-Sync your Android calendars to your watch!
-
-- **Upcoming Events**: Lists future events from your phone's calendars.
-- **Send to Watch**: Pushes these events to the watch's Reminder feature.
-- **Manual Mode**: Switch to manual mode to create reminders directly in the app that won't be overwritten by your phone calendar.
-- **Transliteration**: Automatically converts Cyrillic and other unsupported characters to Latin for watch compatibility.
-
-<br clear="all"/>
-
-### 5. Actions (Remote Control)
-
-<img src="images/ActionsScreen.png" width="200" align="right" style="margin-left: 20px;">
-
-Turn your watch into a remote control. Assign actions to button presses on the watch.
-
-- **Available Actions**:
-  - **Find Phone**: Make your phone ring loudly.
-  - **Take Photo**: Snap a picture with your phone's camera.
-  - **Flashlight**: Turn on your phone's flashlight.
-  - **Media Control**: Play/Pause and Next Track for music.
-  - **Voice Assist**: Launch Google Assistant.
-  - **Set Prayer Alarms**: Set the watch's 5 alarms to Islamic Prayer Times.
-- **How to use**: Short-press the lower-right button on the watch (when in Time mode) to trigger the selected action.
-
-<br clear="all"/>
-
-### 6. Settings
-
-<img src="images/Settings.png" width="200" align="right" style="margin-left: 20px;">
-
-Configure app and watch preferences.
-
-- **Watch Settings**: Adjust light duration, power saving, date format, language, and more.
-- **App Settings**: Configure theme, connection behavior, and notifications.
-- **Smart Defaults**: Easily reset all settings to optimal defaults based on your phone's locale and watch model.
-
-<br clear="all"/>
-
----
-
-## Privacy
-
-G-Shock Smart Sync is built with privacy in mind. We do not require an account, and we do not collect your personal data.
-- **No Account Required**: Use all features without a Casio ID.
-- **Local Processing**: All data stays on your device.
-- **Open Source**: The code is transparent and auditable.
-
-Read our full [Privacy Policy](https://izivkov.github.io/CasioGShockSmartSync/) for more details.
-
----
-
-## Installation
-
-- **F-Droid**: [Download here](https://f-droid.org/en/packages/org.avmedia.gshockGoogleSync/)
-- **GitHub**: [Download APK from Releases](https://github.com/izivkov/CasioGShockSmartSync/releases/)
-- **Google PlayStore**: [Download here](https://play.google.com/store/apps/details?id=org.avmedia.gshockGoogleSync) (Un-branded version)
-
-## Contributing
-
-We welcome contributions!
-- **Code**: Submit a PR to add features or fix bugs.
-- **Watches**: If you have a G-Shock model not yet supported, functionality can often be added. Donations of test units are also highly appreciated to help expand compatibility.
-
-## Related Projects
-
-| Project                                                                              | Description |
-|:-------------------------------------------------------------------------------------|:---|
-| [**GShockAPI**](https://github.com/izivkov/GShockAPI)                                | The core Android library that **this app is built on**. It encapsulates all low-level Bluetooth communication and watch protocol logic into a clean Kotlin API. |
-| [**G-Shock Time Server**](https://github.com/izivkov/GShockTimeServer)               | A Python script that acts as a headless time server for Raspberry Pi or other always-on Linux devices. |
-| [**G-Shock API for ESP32**](https://github.com/izivkov/gshock-api-esp32)             | Standalone G-Shock time server for ESP32 microcontrollers — no phone or PC required. |
-| [**G-Shock Smart Sync Webapp**](https://github.com/izivkov/gshock-smart-sync-webapp) | Experimental web-based app for watch synchronization from a browser via Web Bluetooth. |
-| [**gshock_api**](https://github.com/izivkov/gshock_api)                              | A **Python API library** for G-Shock watches, featuring a pure functional architecture. |
-| [**TRRRST Watch**](https://github.com/taxmeifyoucan/trrrst-watch)                      | An alternative FOSS android companion app for the new Casio F-B100W |
-
----
-
-## For Developers
-
-### Capturing BLE Messages with Wireshark
-
-Wireshark can be used to inspect the raw Bluetooth Low Energy (BLE) packets exchanged between your Android phone and the G-Shock watch. This is useful for reverse-engineering watch protocols or debugging communication issues.
-
-#### 1. Phone Setup (Enable HCI Snoop Log)
-
-Android has a built-in BLE packet logger. Enable it via Developer Options:
-
-1. Go to **Settings → About Phone** and tap **Build Number** 7 times to enable Developer Options.
-2. Go to **Settings → Developer Options**.
-3. Enable **Bluetooth HCI Snoop Log** (exact label varies by device/Android version).
-4. **Restart Bluetooth** (toggle it off and on) to start logging.
-5. Reproduce the action you want to capture (e.g., connect the app to the watch and sync time).
-6. Disable the snoop log again, then pull the log file from the device:
-
-```bash
-adb bugreport bugreport.zip
+```
+git clone -b h5600-sound-mode https://github.com/flyboy14/GShockAPI.git
+git clone -b h5600-sound-mode https://github.com/flyboy14/CasioGShockSmartSync.git
+cd CasioGShockSmartSync
+./gradlew testGithubDebugUnitTest assembleGithubDebug     # JDK 21, Android SDK 37
+adb install -r app/build/outputs/apk/github/debug/app-github-debug.apk
 ```
 
-The HCI log is embedded in the bugreport. Alternatively, on many devices it is available directly at `/sdcard/btsnoop_hci.log`.
+Android 8 or later. **Switching from the official CASIO WATCHES app:** unpair on the watch (SETTING → GENERAL SETTINGS → PAIRING → UNPAIRING), forget the watch in Android's Bluetooth settings, then pair it in this app. Only one app can own the watch at a time.
 
-#### 2. Install Wireshark
+## Known limits
 
-```bash
-# Ubuntu / Debian
-sudo apt install wireshark
+- The watch's alarm slots ring every day; the phone is what switches day-specific and one-time alarms on and off. If the watch is away from the phone for more than a day, they ring on the wrong days until it reconnects.
+- The watch does not report snooze state, so *may be snoozing* is the phone's best guess (a 40-minute window after an alarm with snooze).
+- Battery bars beyond the levels you have calibrated are estimates.
+- Stopwatch laps cannot be read: the watch sends nothing about its stopwatch.
 
-# macOS (Homebrew)
-brew install --cask wireshark
-```
+## Credits and license
 
-Or download the installer from [wireshark.org](https://www.wireshark.org/download.html).
+Built on [G-Shock Smart Sync](https://github.com/izivkov/CasioGShockSmartSync) and [GShockAPI](https://github.com/izivkov/GShockAPI) by Ivo Zivkov — all the hard work of talking to Casio watches is theirs. Weather data by [Open-Meteo](https://open-meteo.com).
 
-#### 3. Open and Filter the Log
-
-1. Open Wireshark and go to **File → Open**, then select `btsnoop_hci.log`.
-2. Wireshark will decode the BLE packets automatically.
-3. Use display filters to focus on relevant traffic:
-
-| Goal | Filter |
-|:---|:---|
-| All BLE ATT traffic | `btatt` |
-| Specific device by address | `bluetooth.addr == AA:BB:CC:DD:EE:FF` |
-| ATT write operations | `btatt.opcode == 0x12` |
-| ATT notifications | `btatt.opcode == 0x1b` |
-
-4. Right-click a packet → **Follow → Bluetooth ATT Stream** to trace a full conversation.
-
----
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+Apache License 2.0, like the upstream project — see [LICENSE](LICENSE).
