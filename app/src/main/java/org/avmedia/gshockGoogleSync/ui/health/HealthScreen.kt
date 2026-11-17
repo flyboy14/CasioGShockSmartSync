@@ -56,7 +56,7 @@ fun HealthScreen() {
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                         .fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     // "Synced at …" (or "Syncing…" while a pull-to-refresh / fetch runs)
                     val healthState by healthViewModel.state.collectAsState()

@@ -76,7 +76,9 @@ data class HealthState(
     val weight: Int = 70, // kg
     val height: Int = 170, // cm
     val calories: Float = 0f,
-    val distanceKm: Float = 0f
+    val distanceKm: Float = 0f,
+    /** DW-H5600: monthly step totals from the phone's stored history (oldest first; null = no data). */
+    val monthly: List<Pair<java.time.YearMonth, Int?>> = emptyList(),
 )
 
 sealed interface HealthAction {
@@ -255,7 +257,10 @@ class HealthViewModel @Inject constructor(
         val stored = org.avmedia.gshockGoogleSync.h5600.H5600Steps.loadStored(appContext) ?: return
         val syncedAt = org.avmedia.gshockGoogleSync.h5600.H5600Steps.syncedAtMillis()
             ?.let { java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneId.systemDefault()) }
-        _state.update { it.copy(stepCounterData = stored, syncedAt = syncedAt).withStepMetrics(stored) }
+        _state.update {
+            it.copy(stepCounterData = stored, syncedAt = syncedAt, monthly = org.avmedia.gshockGoogleSync.h5600.H5600Steps.monthly(appContext))
+                .withStepMetrics(stored)
+        }
     }
 
     private fun requestStepRefresh() {
@@ -279,7 +284,8 @@ class HealthViewModel @Inject constructor(
                             ?.takeIf { api.isH5600SettingsSupported() }
                             ?.let { java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneId.systemDefault()) }
                             ?: java.time.LocalDateTime.now()
-                        val withSteps = current.copy(stepCounterData = stepData, syncedAt = syncedAt)
+                        val monthly = if (api.isH5600SettingsSupported()) org.avmedia.gshockGoogleSync.h5600.H5600Steps.monthly(appContext) else current.monthly
+                        val withSteps = current.copy(stepCounterData = stepData, syncedAt = syncedAt, monthly = monthly)
                         if (profile != null) {
                             applyExerciseProfileState(withSteps, profile, stepData = stepData)
                         } else {

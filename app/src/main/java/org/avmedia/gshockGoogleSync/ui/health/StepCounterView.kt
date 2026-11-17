@@ -55,20 +55,13 @@ fun StepCounterView(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            // Card title
-            AppTextLarge(
-                text = stringResource(id = R.string.steps),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
+            // Compact: Today, Hourly, Daily and Monthly fit on one screen.
             // ── TODAY section ──────────────────────────────────────────
             SectionLabel(text = stringResource(id = R.string.today))
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
             val currentSteps = state.stepCounterData.currentDaySteps ?: 0
             Box(
@@ -78,7 +71,7 @@ fun StepCounterView(
                 contentAlignment = Alignment.Center
             ) {
                 StepsProgressRing(
-                    modifier = Modifier.size(160.dp),
+                    modifier = Modifier.size(120.dp),
                     currentSteps = currentSteps,
                     goal = state.stepGoal,
                     distanceKm = state.distanceKm,
@@ -86,13 +79,11 @@ fun StepCounterView(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            SectionDivider()
-            Spacer(modifier = Modifier.height(16.dp))
+            SectionGap()
 
             // ── HOURLY section ─────────────────────────────────────────
             SectionLabel(text = stringResource(id = R.string.hourly))
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
             // All 24 hours (midnight to now; later hours empty), scrollable, opened at the current hour.
             val hourlyKnown = state.stepCounterData.hourlySteps
@@ -119,13 +110,11 @@ fun StepCounterView(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            SectionDivider()
-            Spacer(modifier = Modifier.height(16.dp))
+            SectionGap()
 
             // ── DAILY section ──────────────────────────────────────────
             SectionLabel(text = stringResource(id = R.string.daily))
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
             // Past days the phone has no data for are shown as "–" (not 0).
             val dailyHistory = state.stepCounterData.dailyHistory.takeLast(6)
@@ -134,6 +123,18 @@ fun StepCounterView(
                 EmptyHistory()
             } else {
                 StepsBarChart(values = daily, labels = dailyLabels(daily.size))
+            }
+
+            if (state.monthly.isNotEmpty()) {
+                SectionGap()
+                SectionLabel(text = "Monthly")
+                StepsBarChart(
+                    values = state.monthly.map { it.second },
+                    labels = state.monthly.map { (m, _) ->
+                        m.month.getDisplayName(java.time.format.TextStyle.SHORT, Locale.getDefault())
+                    },
+                    compactNumbers = true,
+                )
             }
         }
     }
@@ -202,7 +203,7 @@ private fun StepsProgressRing(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(top = 16.dp)
         ) {
-            AppText(text = currentSteps.toString(), fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            AppText(text = currentSteps.toString(), fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Text(
                 text = "of $goal steps",
                 style = MaterialTheme.typography.bodyMedium,
@@ -228,6 +229,15 @@ private fun StepsProgressRing(
 }
 
 private val HOURLY_BAR = 32.dp
+private val CHART_HEIGHT = 100.dp
+
+/** Divider between sections, kept small so all four fit on one screen. */
+@Composable
+private fun SectionGap() {
+    Spacer(modifier = Modifier.height(6.dp))
+    SectionDivider()
+    Spacer(modifier = Modifier.height(6.dp))
+}
 private val HOURLY_GAP = 8.dp
 
 /** Bar chart; null = no data (no bar, [nullText] above). [barWidth] set = fixed width (for scrolling). */
@@ -238,6 +248,7 @@ private fun StepsBarChart(
     modifier: Modifier = Modifier,
     barWidth: androidx.compose.ui.unit.Dp? = null,
     nullText: String = "–",
+    compactNumbers: Boolean = false, // 12345 -> "12.3k"
 ) {
     val barColor = MaterialTheme.colorScheme.primary
     val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
@@ -246,8 +257,8 @@ private fun StepsBarChart(
 
     Canvas(
         modifier = sized
-            .height(140.dp)
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .height(CHART_HEIGHT)
+            .padding(horizontal = 8.dp, vertical = 2.dp)
     ) {
         val spacing = 8.dp.toPx()
         val totalSpacing = spacing * (values.size - 1)
@@ -275,7 +286,12 @@ private fun StepsBarChart(
             )
 
             drawIntoCanvas { canvas ->
-                canvas.nativeCanvas.drawText(value?.toString() ?: nullText, left + barWidth / 2f, top - 4.dp.toPx(), paint)
+                val text = when {
+                    value == null -> nullText
+                    compactNumbers && value >= 1000 -> String.format(Locale.US, "%.1fk", value / 1000f)
+                    else -> value.toString()
+                }
+                canvas.nativeCanvas.drawText(text, left + barWidth / 2f, top - 4.dp.toPx(), paint)
                 canvas.nativeCanvas.drawText(labels[index], left + barWidth / 2f, size.height - 2.dp.toPx(), paint)
             }
         }
@@ -287,7 +303,7 @@ private fun EmptyHistory() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(140.dp),
+            .height(CHART_HEIGHT),
         contentAlignment = Alignment.Center
     ) {
         Text("No history", color = MaterialTheme.colorScheme.onSurfaceVariant)

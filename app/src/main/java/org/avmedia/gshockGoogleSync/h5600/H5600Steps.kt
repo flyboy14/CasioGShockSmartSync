@@ -79,6 +79,22 @@ object H5600Steps {
     private const val KEY_DAYS = "h5600_step_days"   // {"yyyy-MM-dd": steps}
     private const val KEEP_DAYS = 8L
     const val HISTORY_DAYS = 6
+    private const val KEEP_DAYS_HISTORY = 400L // daily totals, for the Monthly chart
+    const val MONTHS = 6
+
+    /**
+     * Step totals of the last [MONTHS] months (oldest first) from the stored daily totals;
+     * null = no stored day in that month. Partial months count only the stored days.
+     */
+    fun monthly(context: android.content.Context, today: java.time.LocalDate = java.time.LocalDate.now()): List<Pair<java.time.YearMonth, Int?>> {
+        val days = loadMap(context, KEY_DAYS)
+        val now = java.time.YearMonth.from(today)
+        return (MONTHS - 1 downTo 0).map { back ->
+            val m = now.minusMonths(back.toLong())
+            val values = days.filterKeys { k -> k.startsWith(m.toString()) }.values
+            m to values.takeIf { it.isNotEmpty() }?.sum()
+        }
+    }
 
     private fun loadMap(context: android.content.Context, key: String): MutableMap<String, Int> =
         runCatching {
@@ -103,7 +119,7 @@ object H5600Steps {
         val days = loadMap(context, KEY_DAYS)
         r.days.forEach { days[it.date.toString()] = it.steps }
         r.headerSteps.takeIf { it >= 0 }?.let { days[today.toString()] = it }
-        days.keys.removeAll { runCatching { java.time.LocalDate.parse(it) }.getOrNull()?.isBefore(today.minusDays(60)) ?: true }
+        days.keys.removeAll { runCatching { java.time.LocalDate.parse(it) }.getOrNull()?.isBefore(today.minusDays(KEEP_DAYS_HISTORY)) ?: true }
         saveMap(context, KEY_DAYS, days)
 
         // Hours without any stored slot are unknown (null), not 0.
