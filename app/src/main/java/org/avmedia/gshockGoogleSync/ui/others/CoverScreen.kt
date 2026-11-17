@@ -77,51 +77,60 @@ private fun RideToUnlock(onUnlock: () -> Unit) {
         // Both texts move left exactly as far as the bicycle moves right (and spring back with it).
         val counter = Modifier.offset { androidx.compose.ui.unit.IntOffset(-offset.value.toInt(), 0) }
         AppTextVeryLarge(text = stringResource(R.string.cover_ride_to_unlock), modifier = counter)
-        androidx.compose.material3.Text(
-            text = ride, // chosen on the Settings tab ("What are we riding?")
-            // One emoji at full size; longer text shrinks so up to 14 characters fit on one line.
-            fontSize = rideFontSize(ride),
-            maxLines = 1,
-            softWrap = false,
+        // The drag is measured on this box, which stays put: on the moving ride itself, an
+        // accelerated ride outruns the finger and a left pull was read as a right ride.
+        Box(
             modifier = Modifier
-                // Visually equal gaps above and below the bicycle (measured on screen: the fonts' own
-                // line spacing differs, so the bottom needs more than the top).
-                .padding(top = 8.dp, bottom = 22.5.dp)
-                .offset { androidx.compose.ui.unit.IntOffset(offset.value.toInt(), 0) }
-                .graphicsLayer {
-                    rotationZ = spin.value
-                    // Pivot a bit above the text box centre. The bicycle still swings around a little
-                    // while spinning (the emoji is not centred in its box); the user liked this look.
-                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0.34f)
-                }
-                .pointerInput(Unit) {
-                    detectHorizontalDragGestures(
-                        onHorizontalDrag = { change, dx ->
-                            change.consume()
-                            if (offset.value <= 0f && (dx < 0f || leftPull > 0f)) {
-                                // Pulling left from the start position: the pull distance sets the spin speed.
-                                held = true
-                                leftPull = (leftPull - dx).coerceAtLeast(0f)
-                            } else {
-                                leftPull = 0f
-                                finger = (finger + dx).coerceAtLeast(0f)
-                                // No upper limit, and accelerated: past the screen edge before the finger is.
-                                scope.launch { offset.snapTo(accelerated(finger, accelPx)) }
-                            }
-                        },
-                        onDragEnd = {
-                            held = false; leftPull = 0f; finger = 0f // let the spin finish its turn
-                            if (offset.value >= rideDistancePx && !unlocked) {
-                                unlocked = true
-                                unlockBuzz(context) // no beep: a short vibration confirms the unlock
-                                onUnlock()
-                            }
-                            scope.launch { offset.animateTo(0f) }
-                        },
-                        onDragCancel = { held = false; leftPull = 0f; finger = 0f; scope.launch { offset.animateTo(0f) } },
-                    )
-                },
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures(
+                            onHorizontalDrag = { change, dx ->
+                                change.consume()
+                                if (offset.value <= 0f && (dx < 0f || leftPull > 0f)) {
+                                    // Pulling left: mirrors the ride to the right (same acceleration: the
+                                    // ride is past the left edge when the finger reaches it, the texts past
+                                    // the right one) and spins, faster the further it is pulled. Never unlocks.
+                                    held = true
+                                    leftPull = (leftPull - dx).coerceAtLeast(0f)
+                                    scope.launch { offset.snapTo(-accelerated(leftPull, accelPx)) }
+                                } else {
+                                    leftPull = 0f
+                                    finger = (finger + dx).coerceAtLeast(0f)
+                                    // No upper limit, and accelerated: past the screen edge before the finger is.
+                                    scope.launch { offset.snapTo(accelerated(finger, accelPx)) }
+                                }
+                            },
+                            onDragEnd = {
+                                held = false; leftPull = 0f; finger = 0f // let the spin finish its turn
+                                if (offset.value >= rideDistancePx && !unlocked) {
+                                    unlocked = true
+                                    unlockBuzz(context) // no beep: a short vibration confirms the unlock
+                                    onUnlock()
+                                }
+                                scope.launch { offset.animateTo(0f) }
+                            },
+                            onDragCancel = { held = false; leftPull = 0f; finger = 0f; scope.launch { offset.animateTo(0f) } },
+                        )
+                    },
+        ) {
+            androidx.compose.material3.Text(
+                text = ride, // chosen on the Settings tab ("What are we riding?")
+                // One emoji at full size; longer text shrinks so up to 14 characters fit on one line.
+                fontSize = rideFontSize(ride),
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier
+                    // Visually equal gaps above and below the bicycle (measured on screen: the fonts' own
+                    // line spacing differs, so the bottom needs more than the top).
+                    .padding(top = 8.dp, bottom = 22.5.dp)
+                    .offset { androidx.compose.ui.unit.IntOffset(offset.value.toInt(), 0) }
+                    .graphicsLayer {
+                        rotationZ = spin.value
+                        // Pivot a bit above the text box centre. The bicycle still swings around a little
+                        // while spinning (the emoji is not centred in its box); the user liked this look.
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0.34f)
+                    }
         )
+        }
         // Same look as the start-screen greeting (bold red).
         androidx.compose.material3.Text(
             text = stringResource(R.string.cover_signature),
