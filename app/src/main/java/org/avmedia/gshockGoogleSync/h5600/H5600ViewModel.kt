@@ -51,6 +51,8 @@ class H5600ViewModel @Inject constructor(
         val basic: org.avmedia.gshockapi.model.H5600Basic? = null,
         val physical: org.avmedia.gshockapi.model.H5600Physical? = null,
         val stepGoal: org.avmedia.gshockapi.model.StepGoal? = null,
+        val modeList: List<Int>? = null, // 0x52, button order; left-out modes are hidden
+        val knownModes: List<Int> = emptyList(), // every mode this watch has shown (to bring hidden ones back)
     ) {
         val hrMonitor: HeartRateMonitor? get() = hrMonitorCode?.let(HeartRateMonitor::fromCode)
     }
@@ -225,8 +227,11 @@ class H5600ViewModel @Inject constructor(
             val physical = readOrNull { api.getH5600Physical() }
             val goal = readOrNull { api.getH5600StepGoal() }
             val hr = readOrNull { api.getH5600HeartRateMonitorCode() }
+            val modes = readOrNull { api.getH5600ModeList() }
+            val known = modes?.let { rememberModes(it) } ?: knownModes()
             _state.update {
                 it.copy(
+                    modeList = modes ?: it.modeList, knownModes = known,
                     basic = basic ?: it.basic, physical = physical ?: it.physical,
                     stepGoal = goal ?: it.stepGoal,
                     hrMonitorCode = hr ?: it.hrMonitorCode,
@@ -244,6 +249,31 @@ class H5600ViewModel @Inject constructor(
             kotlinx.coroutines.delay(700)
             run(what, onError = { refreshSettings() }, block = block)
         }
+    }
+
+    fun setStepReminder(on: Boolean) {
+        val b = _state.value.basic ?: return
+        val nb = b.copy(stepReminder = on)
+        _state.update { it.copy(basic = nb) }
+        debouncedWrite("basic", "step reminder") { api.setH5600Basic(nb) }
+    }
+
+    /** New mode order / visibility; Time & date always stays first. */
+    fun setModeList(modes: List<Int>) {
+        val list = listOf(TIME_AND_DATE) + modes.filter { it != TIME_AND_DATE }
+        _state.update { it.copy(modeList = list) }
+        debouncedWrite("modes", "watch modes") { api.setH5600ModeList(list) }
+    }
+
+    // Every mode the watch has listed, in first-seen order (hidden modes vanish from 0x52).
+    private fun knownModes(): List<Int> =
+        H5600Prefs.get(context).getString(KEY_KNOWN_MODES, null)?.split(',')?.mapNotNull { it.toIntOrNull() }
+            ?: DEFAULT_MODES
+
+    private fun rememberModes(current: List<Int>): List<Int> {
+        val known = (knownModes() + current).distinct()
+        H5600Prefs.get(context).edit().putString(KEY_KNOWN_MODES, known.joinToString(",")).apply()
+        return known
     }
 
     fun setPhysical(v: org.avmedia.gshockapi.model.H5600Physical) {
@@ -411,6 +441,10 @@ class H5600ViewModel @Inject constructor(
     /** A watch read whose failure keeps the last known value; real cancellation is rethrown. */
     companion object {
         private const val KEY_HR_BEFORE_ALL_DAY = "hr_before_all_day"
+        private const val KEY_KNOWN_MODES = "h5600_known_modes"
+        const val TIME_AND_DATE = 0x01
+        // The user's DW-H5600 list as first read (2026-11-17), before anything was hidden.
+        private val DEFAULT_MODES = listOf(0x01, 0x0F, 0x0E, 0x11, 0x10, 0x02, 0x08, 0x09, 0x0A, 0x03, 0x05, 0x06)
         /** Face items that need the watch to measure heart rate during the day. */
         val HR_ITEMS = setOf(WatchFaceItem.HEART_RATE, WatchFaceItem.HEART_RATE_MIN_MAX)
     }

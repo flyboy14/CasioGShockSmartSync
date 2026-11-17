@@ -257,8 +257,10 @@ class HealthViewModel @Inject constructor(
         val stored = org.avmedia.gshockGoogleSync.h5600.H5600Steps.loadStored(appContext) ?: return
         val syncedAt = org.avmedia.gshockGoogleSync.h5600.H5600Steps.syncedAtMillis()
             ?.let { java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneId.systemDefault()) }
+        val goal = org.avmedia.gshockGoogleSync.utils.LastKnown.int(appContext, "step_goal")
         _state.update {
-            it.copy(stepCounterData = stored, syncedAt = syncedAt, monthly = org.avmedia.gshockGoogleSync.h5600.H5600Steps.monthly(appContext))
+            it.copy(stepCounterData = stored, syncedAt = syncedAt, monthly = org.avmedia.gshockGoogleSync.h5600.H5600Steps.monthly(appContext),
+                stepGoal = goal ?: it.stepGoal)
                 .withStepMetrics(stored)
         }
     }
@@ -277,6 +279,11 @@ class HealthViewModel @Inject constructor(
                     val stepData = withTimeoutOrNull(timeout) { fetchStepCounter() }
                         ?: return@runCatching
                     val profile = readExerciseProfile()
+                    // DW-H5600: the ring's goal is the watch's own step goal (0x43, set on the Sport tab).
+                    val watchGoal = if (api.isH5600SettingsSupported())
+                        runCatching { withTimeoutOrNull(10.seconds) { api.getH5600StepGoal() } }.getOrNull()?.steps
+                            ?.also { org.avmedia.gshockGoogleSync.utils.LastKnown.put(appContext, "step_goal", it) }
+                    else null
 
                     _state.update { current ->
                         // DW-H5600 data may come from the 15-min cache: show the real sync time.
@@ -285,7 +292,8 @@ class HealthViewModel @Inject constructor(
                             ?.let { java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneId.systemDefault()) }
                             ?: java.time.LocalDateTime.now()
                         val monthly = if (api.isH5600SettingsSupported()) org.avmedia.gshockGoogleSync.h5600.H5600Steps.monthly(appContext) else current.monthly
-                        val withSteps = current.copy(stepCounterData = stepData, syncedAt = syncedAt, monthly = monthly)
+                        val withSteps = current.copy(stepCounterData = stepData, syncedAt = syncedAt, monthly = monthly,
+                            stepGoal = watchGoal ?: current.stepGoal)
                         if (profile != null) {
                             applyExerciseProfileState(withSteps, profile, stepData = stepData)
                         } else {

@@ -21,6 +21,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -40,6 +45,89 @@ fun H5600SettingsCards(vm: H5600ViewModel = hiltViewModel()) {
     if (!s.supported) return
     LaunchedEffect(Unit) { vm.refreshSettings() }
     NightTimeCard(vm)
+    WatchModesCard(vm)
+}
+
+/**
+ * Watch modes (0x52): the order the mode button cycles through, and which modes are shown.
+ * Hold a mode and drag it to reorder (like the alarms and world clocks). Time & date always
+ * stays first. Hidden modes stay listed below (switched off) to bring back.
+ */
+@Composable
+private fun WatchModesCard(vm: H5600ViewModel) {
+    val s by vm.state.collectAsState()
+    var dragIndex by remember { mutableStateOf(-1) }
+    var dragY by remember { mutableStateOf(0f) }
+    val heights = remember { androidx.compose.runtime.mutableStateMapOf<Int, Int>() }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    SettingsCard("Watch modes") {
+        val list = s.modeList
+        if (list == null) { LoadingSpinner(); return@SettingsCard }
+        AppText(text = "Hold and drag to reorder. Switch off the modes you do not use.", fontSize = 13.sp)
+        val label = { code: Int -> org.avmedia.gshockapi.model.WatchMode.fromCode(code)?.label ?: "Mode 0x%02X".format(code) }
+        val movable = list.filter { it != H5600ViewModel.TIME_AND_DATE }
+        val hidden = s.knownModes.filter { it !in list }
+
+        ModeRow(label(H5600ViewModel.TIME_AND_DATE), null) {}
+
+        val target = if (dragIndex < 0) -1 else dropIndex(dragIndex, dragY, movable.indices.map { heights[it] ?: 0 }, 0f)
+        LaunchedEffect(target) {
+            if (dragIndex >= 0) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+        }
+        val draggedSize = if (dragIndex < 0) 0f else (heights[dragIndex] ?: 0).toFloat()
+        movable.forEachIndexed { i, code -> androidx.compose.runtime.key(code) {
+            val dragging = dragIndex == i
+            val makeRoom = when {
+                dragIndex < 0 || dragging -> 0f
+                dragIndex < target && i in (dragIndex + 1)..target -> -draggedSize
+                dragIndex > target && i in target until dragIndex -> draggedSize
+                else -> 0f
+            }
+            val shift by androidx.compose.animation.core.animateFloatAsState(makeRoom, label = "modeRoom")
+            ModeRow(
+                label(code), true,
+                modifier = Modifier
+                    .onGloballyPositioned { heights[i] = it.size.height }
+                    .zIndex(if (dragging) 1f else 0f)
+                    .graphicsLayer {
+                        translationY = if (dragging) dragY else shift
+                        scaleX = if (dragging) 1.03f else 1f
+                        scaleY = if (dragging) 1.03f else 1f
+                        alpha = if (dragging) 0.85f else 1f
+                    }
+                    .pointerInput(i, movable.size) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                dragIndex = i; dragY = 0f
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            },
+                            onDrag = { change, amount -> change.consume(); dragY += amount.y },
+                            onDragEnd = {
+                                val to = dropIndex(i, dragY, movable.indices.map { heights[it] ?: 0 }, 0f)
+                                dragIndex = -1; dragY = 0f
+                                if (to != i) vm.setModeList(movable.toMutableList().apply { add(to, removeAt(i)) })
+                            },
+                            onDragCancel = { dragIndex = -1; dragY = 0f },
+                        )
+                    },
+            ) { vm.setModeList(movable - code) }
+        } }
+        hidden.forEach { code -> ModeRow(label(code), false) { vm.setModeList(movable + code) } }
+    }
+}
+
+/** One mode: name and a show/hide switch ([shown] null = fixed, no switch). */
+@Composable
+private fun ModeRow(name: String, shown: Boolean?, modifier: Modifier = Modifier, onToggle: () -> Unit) {
+    Row(
+        modifier = modifier.fillMaxWidth().padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AppText(text = name, modifier = Modifier.weight(1f))
+        if (shown == null) AppText(text = "always first", fontSize = 13.sp)
+        else AppSwitch(checked = shown, onCheckedChange = { onToggle() })
+    }
 }
 
 /** "Sport" tab: heart-rate monitor, zone alert, heart-rate values, step goal. Pull down to re-read. */
@@ -157,6 +245,9 @@ private fun StepGoalCard(vm: H5600ViewModel) {
             vm.setStepGoal(g.copy(steps = (g.steps - 500).coerceAtLeast(500)))
         }, { vm.setStepGoal(g.copy(steps = (g.steps + 500).coerceAtMost(99_500))) })
         SwitchRow("Notify when the goal is reached", g.notifyWhenReached) { vm.setStepGoal(g.copy(notifyWhenReached = it)) }
+        s.basic?.let { b ->
+            SwitchRow("Step reminder (when you have not moved for a while)", b.stepReminder) { vm.setStepReminder(it) }
+        }
     }
 }
 
