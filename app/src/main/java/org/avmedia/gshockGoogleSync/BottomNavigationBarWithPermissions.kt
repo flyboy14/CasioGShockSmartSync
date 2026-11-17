@@ -23,6 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -114,6 +115,8 @@ fun BottomNavigationBarWithPermissions(
         }
     }
 
+    val pullUp = org.avmedia.gshockGoogleSync.ui.others.rememberPullUpToLockState()
+    androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -153,7 +156,9 @@ fun BottomNavigationBarWithPermissions(
         NavHost(
             navController = navController,
             startDestination = startRoute,
-            modifier = Modifier.padding(paddingValues = paddingValues),
+            modifier = Modifier.padding(paddingValues = paddingValues)
+                .nestedScroll(pullUp.connection) // pull up past the bottom of a tab to lock
+                .then(pullUp.releaseWatcher),
             // No tab animations (not even the navigation library's default fade).
             enterTransition = { androidx.compose.animation.EnterTransition.None },
             exitTransition = { androidx.compose.animation.ExitTransition.None },
@@ -206,6 +211,12 @@ fun BottomNavigationBarWithPermissions(
                 SettingsScreen()
             }
         }
+    }
+    // Pull up past the bottom of any tab to lock (shows the cover screen); above the tab bar.
+    org.avmedia.gshockGoogleSync.ui.others.PullUpToLockIndicator(
+        pullUp,
+        androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.BottomCenter).padding(bottom = 88.dp),
+    )
     }
 }
 
