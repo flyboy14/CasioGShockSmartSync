@@ -53,13 +53,42 @@ Hold an alarm and drag it to reorder the list; new alarms go to the top. Edits s
 </p>
 
 - **Watch face** — Face 1 (weekday) or Face 2 with its item: Sun, Steps, Moon, Heart rate, Sleep.
-- **Dynamic sunset-step toggle** — Steps all day, the Sun screen from four hours before sunset until ten minutes after.
-- **Weather instead of sunrise** — the sun screen's top line shows `W:TT` (weather 1 sunny / 2 cloudy / 3 rain / 4 extreme, temperature in °C) from Open-Meteo, while the sunset stays real. It works by sending the watch coordinates solved with its own sun formula; fine-tune buttons correct the last minute.
+- **Smart weather-step face** — Steps all day, the sun (or weather) screen in the evening; see below.
+- **Weather instead of sunrise** — the weather and temperature on the watch's sun screen; see below.
 - **Real today** — real sunrise and sunset, the current weather, and what the watch should be showing.
 - **Sound mode** — Sound + vibe, Sound only, Vibe only, Off, Custom.
 - **Notifications only from chosen apps** — a per-app allowlist for what reaches the watch.
 - **Find Phone** — pick the ring sound and volume, vibrate too, test it. Pressing Find Phone on the watch rings the phone at once (the watch stays connected, so there is no reconnect wait); pressing *back* on the watch stops it.
 - **Start screen greeting** and **What are we riding?** — see *The fun bits* below.
+
+#### Weather instead of sunrise
+
+The DW-H5600 has no weather, but it has a sun screen: sunrise on top, sunset below, both calculated by the watch from the home location it is given. This feature gives it a location chosen so that the "sunrise" reads as the current weather, while the sunset stays the real one.
+
+The top line reads **`W:TT`**:
+
+| `W` | weather |
+|---|---|
+| 1 | sunny — clear, or clouds up to 30 % |
+| 2 | cloudy — overcast, fog |
+| 3 | rain or snow — any precipitation |
+| 4 | extreme — heavy rain or snow, thunderstorm, more than 2 mm in 15 minutes, wind from 40 km/h or gusts from 60 km/h |
+
+`TT` is the outdoor temperature in °C. So `1:18` is sunny and 18 °C, `3:07` is rain and 7 °C.
+
+- The current conditions come from [Open-Meteo](https://open-meteo.com) for the phone's location. They are fetched just after every quarter hour, when Open-Meteo publishes new values, and sent to the watch while it is connected.
+- How it works: the app solves for a latitude and longitude where today's sunrise falls at `W:TT` local time and the sunset falls at the real sunset where you are. It uses the same horizon angle the watch's own formula appears to use, measured against the watch, so the display lands on the right minute. If your watch is still a minute off, use the *Top line* and *Sunset* fine-tune buttons.
+- The watch only recalculates its sun times when its time is set, so each update is a location write plus a time sync. Updates pause while an alarm may be snoozing, because a time sync would cancel the snooze.
+- Limits: temperatures below 0 °C show as `00`, and above 59 °C as `59`. The real sunrise is no longer shown (the *Real today* card in the app still shows it). With no connection or no internet, the watch keeps the last weather it received.
+
+#### Smart weather-step face
+
+Face 2 shows one item at a time. With this switch on (*Dynamic sunset-step toggle* in the app), the phone picks the item for you:
+
+- **Steps** for most of the day;
+- the **sun screen** from **four hours before sunset until ten minutes after** — with *Weather instead of sunrise* on, that is the weather and temperature on top and today's sunset below.
+
+The app works out today's sunset from the phone's location and switches the face exactly at both edges with an exact Android alarm, so it also happens when the phone is asleep. While the switch is on, the manual item buttons are greyed out. During polar day or night (no sunset), the face stays on Steps.
 
 ### Time
 
