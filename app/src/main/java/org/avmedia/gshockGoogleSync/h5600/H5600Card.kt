@@ -326,10 +326,12 @@ private fun SoundNotificationsCard(vm: H5600ViewModel) {
     val context = LocalContext.current
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
-            CardTitle("Sound & notifications", "Sound mode is the watch's own setting for all its sounds. " +
-                "Alarm days and Vibe only / Sound are set per alarm in the Alarms tab; the phone switches the sound " +
-                "mode for the alarm that is due next.<br><br>Notifications only from chosen apps: when on, only the " +
-                "checked apps reach the watch; when off, every app's notifications do.")
+            CardTitle("Sound & notifications", "Sound mode is the watch's own setting for all its sounds, and the " +
+                "mode you pick here is kept. An alarm borrows the watch: 5 min before it rings the mode it needs is " +
+                "set (Vibe only / Sound, chosen per alarm in the Alarms tab), and after the ring or its snooze your " +
+                "mode comes back.<br><br>Silent at night: the watch has no sound and no vibration from the start to " +
+                "the end of the night time (set on the Settings tab); alarms still ring.<br><br>Notifications only " +
+                "from chosen apps: when on, only the checked apps reach the watch; when off, every app's notifications do.")
             // Sound mode: the active button shows it; text only while it is not known yet.
             if (s.soundMode == null) AppText(
                 text = if (s.busy) "Reading sound mode…" else "Sound mode unknown",
@@ -354,6 +356,18 @@ private fun SoundNotificationsCard(vm: H5600ViewModel) {
             }
 
             s.lastApplied?.let { AppText(text = "Last applied: $it", fontSize = 13.sp) }
+            // Do not disturb during night time (phone-side: the sound mode is Off through the night).
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    AppText(text = "Silent at night")
+                    AppText(text = s.nightTimeText ?: "Night time not read yet: open the Settings tab once", fontSize = 13.sp)
+                }
+                AppSwitch(checked = s.nightDnd, onCheckedChange = { vm.setNightDnd(it) })
+            }
             // Notification app filter
             var filter by remember { mutableStateOf(NotificationFilter.load(context)) }
             val appsScope = androidx.compose.runtime.rememberCoroutineScope()

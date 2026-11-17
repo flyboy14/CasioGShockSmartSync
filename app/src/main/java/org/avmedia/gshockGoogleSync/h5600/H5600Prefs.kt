@@ -40,6 +40,13 @@ object H5600Prefs {
     fun saveNightTime(context: Context, startMin: Int, endMin: Int) =
         get(context).edit().putInt(KEY_NIGHT_START, startMin).putInt(KEY_NIGHT_END, endMin).apply()
 
+    /** The watch's night time (minutes of the day) as last read or written, else null. */
+    fun nightTime(context: Context): Pair<Int, Int>? {
+        val p = get(context)
+        if (!p.contains(KEY_NIGHT_START)) return null
+        return p.getInt(KEY_NIGHT_START, 0) to p.getInt(KEY_NIGHT_END, 0)
+    }
+
     /** The night window (minutes of the day) when DND is on and the times are known, else null. */
     fun nightDnd(context: Context): Pair<Int, Int>? {
         val p = get(context)

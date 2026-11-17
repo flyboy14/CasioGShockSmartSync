@@ -53,6 +53,7 @@ class H5600ViewModel @Inject constructor(
         val stepGoal: org.avmedia.gshockapi.model.StepGoal? = null,
         val modeList: List<Int>? = null, // 0x52, button order; left-out modes are hidden
         val nightDnd: Boolean = false, // do not disturb during night time (phone-side, via the sound mode)
+        val nightTimeText: String? = null, // the watch's night time as last read, e.g. "11:00 PM – 8:20 AM"
         val knownModes: List<Int> = emptyList(), // every mode this watch has shown (to bring hidden ones back)
     ) {
         val hrMonitor: HeartRateMonitor? get() = hrMonitorCode?.let(HeartRateMonitor::fromCode)
@@ -78,6 +79,10 @@ class H5600ViewModel @Inject constructor(
     private val running = java.util.concurrent.atomic.AtomicInteger(0)
 
     init {
+        // The scheduler switches the sound mode around alarms and the night: show what it set.
+        viewModelScope.launch {
+            runner.soundModeSet.collect { m -> if (m != null) _state.update { it.copy(soundMode = m) } }
+        }
         refresh()
         // Times on this tab are formatted when built: rebuild them when the 12h/24h choice changes.
         viewModelScope.launch {
@@ -124,6 +129,10 @@ class H5600ViewModel @Inject constructor(
             } ?: "no temperature yet",
             dynamicFace = SunFace.isEnabled(context),
             nightDnd = H5600Prefs.nightDndEnabled(context),
+            nightTimeText = H5600Prefs.nightTime(context)?.let { (a, b) ->
+                val f = { m: Int -> org.avmedia.gshockGoogleSync.utils.AppTimeFormat.format(java.time.LocalTime.of(m / 60, m % 60)) }
+                "${f(a)} – ${f(b)}"
+            },
             faceLeadMin = SunFace.leadMin(context),
             sunsetText = set?.let { t ->
                 "sunset %s → Sun data %s–%s".format(
@@ -302,6 +311,7 @@ class H5600ViewModel @Inject constructor(
             api.setH5600Basic(nb)
             if (np != null) api.setH5600Physical(np)
             H5600Prefs.saveNightTime(context, startH * 60 + startM, endH * 60 + endM)
+            reloadPrefs()
             if (H5600Prefs.nightDndEnabled(context)) runner.applyAlarms() // re-plan the night silence
         }
     }

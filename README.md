@@ -26,7 +26,7 @@ Each alarm has:
 
 - a **label** (phone only — the watch has no alarm names)
 - **repeat**: *Once*, every day, Mon–Fri, weekends or any set of days
-- **Sound + vibe** or **Vibe only** — the watch's single sound mode is switched for the alarm that is due next
+- **Sound + vibe** or **Vibe only** — the watch has one sound mode for everything, so the alarm *borrows* it: five minutes before it rings the mode it needs is set, and after the ring (or the snooze) your own mode comes back
 - **snooze** on/off
 - **smart wake**: ring up to 15/30/45/60 minutes early, in light sleep
 
@@ -52,11 +52,10 @@ Hold an alarm and drag it to reorder the list; new alarms go to the top. Edits s
   <img src="docs/screenshots/09_custom_3.png" width="220" alt="Custom tab: Find Phone, greeting and ride">
 </p>
 
-- **Watch face** — Face 1 (weekday) or Face 2 with its item: Sun, Steps, Moon, Heart rate, Sleep.
-- **Smart weather-step face** — Steps all day, the sun (or weather) screen before sunset; see below.
-- **Weather instead of sunrise** — the weather and temperature on the watch's sun screen; see below.
-- **Real today** — real sunrise and sunset, the current weather, and what the watch should be showing.
-- **Sound mode** — Sound + vibe, Sound only, Vibe only, Off, Custom.
+- **Watch face** — Face 1 (weekday) or Face 2 with its item: **Auto** (steps by day, the sun screen before sunset; see below), Sun, Steps, Moon, Heart rate, Sleep. Picking Heart rate offers to switch heart-rate monitoring to *All day* (the item shows nothing without it); leaving it offers to switch back.
+- **Sun & weather** — *Weather instead of sunrise* (see below), today's real sunrise and sunset, the current weather and what the watch should be showing. The refresh icon fetches the weather and sends it to the watch at once.
+- **Sound mode** — Sound + vibe, Sound only, Vibe only, Off, Custom. This is *your* mode: alarms borrow the watch briefly and give it back.
+- **Silent at night** — no sound and no vibration from the start to the end of your night time; alarms still ring.
 - **Notifications only from chosen apps** — a per-app allowlist for what reaches the watch.
 - **Find Phone** — pick the ring sound and volume, vibrate too, test it. Pressing Find Phone on the watch rings the phone at once (the watch stays connected, so there is no reconnect wait); pressing *back* on the watch stops it.
 - **Start screen greeting** and **What are we riding?** — see *The fun bits* below.
@@ -81,14 +80,16 @@ The top line reads **`W:TT`**:
 - The watch only recalculates its sun times when its time is set, so each update is a location write plus a time sync. Updates pause while an alarm may be snoozing, because a time sync would cancel the snooze.
 - Limits: temperatures below 0 °C show as `00`, and above 59 °C as `59`. The real sunrise is no longer shown (the *Real today* card in the app still shows it). With no connection or no internet, the watch keeps the last weather it received.
 
-#### Smart weather-step face
+#### Auto face (steps / sun)
 
-Face 2 shows one item at a time. With this switch on (*Dynamic sunset-step toggle* in the app), the phone picks the item for you:
+Face 2 shows one item at a time. With **Auto** chosen as the item, the phone picks it for you:
 
 - **Steps** for most of the day;
 - the **sun screen** from **four hours before sunset until ten minutes after** (the lead time is adjustable in 15-minute steps, from 15 minutes to 12 hours) — with *Weather instead of sunrise* on, that is the weather and temperature on top and today's sunset below.
 
-The app works out today's sunset from the phone's location and switches the face exactly at both edges with an exact Android alarm, so it also happens when the phone is asleep. While the switch is on, the manual item buttons are greyed out. During polar day or night (no sunset), the face stays on Steps.
+The app works out today's sunset from the phone's location and switches the face exactly at both edges with an exact Android alarm, so it also happens when the phone is asleep. Picking any other item switches Auto off. During polar day or night (no sunset), the face stays on Steps.
+
+Every card has an (i) button with its explanation; the cards themselves show only values.
 
 ### Time
 
@@ -100,7 +101,7 @@ The app works out today's sunset from the phone's location and switches the face
 - **Watch time format** 12h / 24h — the whole app follows the watch.
 - **Hourly time signal**.
 - **Home time** and the **watch sensor** temperature (it reads body heat, not the weather).
-- **Battery** as the watch shows it: four bars. The watch reports a level, not a percentage; tap the battery to tell the app how many bars the watch shows for the current level.
+- **Battery** as the watch shows it: four pastel bars (red, orange, light green, green). The watch reports a level, not a percentage; tap the battery to tell the app how many bars the watch shows for the current level (until then the bars are drawn lighter).
 
 <br clear="right">
 
@@ -108,17 +109,32 @@ The app works out today's sunset from the phone's location and switches the face
 
 <img src="docs/screenshots/04_health.png" width="240" align="left" alt="Health tab">
 
-Steps from the watch's LifeLog: today's total, the goal, distance, calories and an hourly breakdown.
+Steps from the watch's LifeLog, on one screen: **today** (with the goal set on the watch, distance and calories), **hourly** (24 hours, scroll sideways, opens at the current hour), **daily** (the last seven days) and **monthly** (six months).
 
-A full LifeLog transfer takes a few minutes — the watch sends its history in small pieces and keeps answering "busy" — so the app saves the last result on the phone and shows today's numbers immediately, with *Synced at …*, while a new sync runs in the background. Pull down to sync now.
+The watch only ever sends steps the phone has not fetched yet, and cannot send them again. So the app keeps every sync on the phone (5-minute slots and daily totals, merged so nothing counts twice) and draws the charts from that history. Hours and days it has no data for stay empty ("–") rather than showing 0.
+
+A transfer takes a while — the watch sends in small pieces — so the last result shows at once with *Synced at …* while a new sync runs. Pull down to sync now.
 
 <br clear="left">
+
+### Sport
+
+<img src="docs/screenshots/12_sport.png" width="240" align="right" alt="Sport tab">
+
+- **Heart-rate monitor**: *All day* (daytime heart rate, calories, sleep evaluation), *Activities + night*, or *Off* — the watch's battery trade-off.
+- **Heart-rate values**: max and resting heart rate, the watch's own estimate or your own value; VO2max as measured by the watch.
+- **Daily step goal** (− / + in 500s), a **notification** when you reach it, and the **step reminder** (the watch nudges you after a long time without moving).
+
+<br clear="right">
 
 ### Settings
 
 <img src="docs/screenshots/10_settings.png" width="240" align="right" alt="Settings tab">
 
 Button tone and vibration, auto light, illumination period, power saving — each change is written to the watch straight away (no *Send* button), on top of a fresh read so nothing else on the watch is touched.
+
+- **Night time** — your sleep time on the watch (sleep tracking, night-time heart rate, and the window for *Silent at night*).
+- **Watch modes** — the order of the watch's modes (hold and drag) and which ones it shows (switch off the ones you never use), saved to the watch in one go. Collapsed until you tap it.
 
 **Disconnect** drops the connection after a confirmation; the watch reconnects the usual way (its connect button).
 
@@ -146,12 +162,21 @@ The watch stays connected all day (the app repeats the official app's `0x39` han
 
 - when an alarm time passes: reload the alarm slots, the smart slot and the sound mode, switch finished one-time alarms off
 - at the edges of the sunset window: switch the watch face
+- five minutes before an alarm and after it (or its snooze): switch the sound mode to what the alarm needs and back to yours
+- at the start and end of the night: silence the watch, when *Silent at night* is on
 - every quarter hour: refresh the sun data or the weather (a location and time sync — the watch only recalculates its sun times on a time write)
 - on every connection: one location and time sync
 
 It wakes itself with exact Android alarms, so this keeps working while the phone dozes overnight. Requests to the watch are shared between screens, retried when the watch does not answer and serialized per setting, so two quick changes cannot undo each other.
 
-The protocol details found along the way (sound mode `0x42`, watch face `0x51`, smart alarm `0x50`, home location `0x24`, battery level, LifeLog, …) are written up in the [GShockAPI fork](https://github.com/flyboy14/GShockAPI/tree/h5600-sound-mode) in `docs/DW-H5600-protocol.md`. More notes for this app: [`docs/DW-H5600.md`](docs/DW-H5600.md).
+The protocol details found along the way (sound mode `0x42`, watch face `0x51`, smart alarm `0x50`, heart-rate monitor `0x41`, step goal `0x43`, sleep and heart-rate values `0x4F`, watch modes `0x52`, home location `0x24`, LifeLog, …) are written up in the [GShockAPI fork](https://github.com/flyboy14/GShockAPI/tree/h5600-sound-mode) in `docs/DW-H5600-protocol.md`. Many of them were read out of the official app's own code and then tested on the watch — it acknowledges plenty of settings it does not keep, so only what reads back changed made it into the app.
+
+More for this app:
+
+- [`docs/DW-H5600.md`](docs/DW-H5600.md) — what each tab does, and where the code is
+- [`docs/DW-H5600-DEVELOPMENT.md`](docs/DW-H5600-DEVELOPMENT.md) — how to add the next feature: the patterns used everywhere, testing on the watch, reading the official app
+- [`docs/DW-H5600-feature-map.md`](docs/DW-H5600-feature-map.md) — every setting the official app knows, and what this watch actually keeps
+- `tools/` — small helpers for testing over adb
 
 ## Building and installing
 
@@ -173,6 +198,8 @@ Android 8 or later. **Switching from the official CASIO WATCHES app:** unpair on
 - The watch does not report snooze state, so *may be snoozing* is the phone's best guess (a 40-minute window after an alarm with snooze).
 - Battery bars beyond the levels you have calibrated are estimates.
 - Stopwatch laps cannot be read: the watch sends nothing about its stopwatch.
+- Step history starts with the first sync of this version; earlier days cannot be fetched again.
+- Not settable on this watch (it ignores them): date order, weekday language, font, distance units, auto pause, heart-rate zone alert, the exercise profile.
 
 ## Credits and license
 

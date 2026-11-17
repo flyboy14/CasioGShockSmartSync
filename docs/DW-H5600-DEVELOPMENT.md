@@ -153,7 +153,26 @@ this must be **stored on the phone, keyed by time**, and merged, so a re-sent re
 instead of counting twice (`H5600Steps.merge`: 5-minute slots by epoch minute, daily totals by date,
 kept 8 and 400 days). Charts are built from the store, not from the last sync.
 
-### 4.5 Finishing
+### 4.5 Settings the phone changes over time (the scheduler)
+
+Some watch settings are changed by the phone on a timetable (`H5600ScheduleRunner`): the sound mode
+for alarms, the face in Auto, the sun data / weather. The rule for all of them:
+
+- **The user's choice is the base.** Store it on the phone (`H5600Prefs`, e.g. `baseSoundMode`).
+  Something may *borrow* the watch for a window and must give it back; it never replaces the base.
+- **The decision is a pure function of (data, now, base)** in a plain object, so it is unit-tested
+  (`AlarmPool.desiredSoundMode`, `AlarmPool.baseAt`, `SunFace.desiredFace`; tests in `AlarmPoolTest`).
+- **Windows are explicit:** start and end times (`AlarmPool.soundWindow`: 5 min before the alarm
+  (before a smart window) → end of the ring / snooze / stopped snooze; night window for DND).
+- **The scheduler wakes at every edge** (`nextAlarmBoundary` collects `nextSoundBoundary`,
+  `nextNightBoundary`, slot reloads) with exact Android alarms, and each pass writes only when the
+  watch differs (`api.setSoundMode` reads first and skips equal writes).
+- **Protect running alarms:** time syncs and alarm-slot writes cancel a snooze on the watch, so
+  automatic passes hold them during a snooze window (`AlarmPool.snoozing`).
+- A user change that affects the timetable (alarm edit, night time, DND switch) calls
+  `runner.applyAlarms()` so the watch is updated at once and the next wake-up is re-planned.
+
+### 4.6 Finishing
 
 1. Build: `./gradlew assembleGithubDebug` (tests: `testGithubDebugUnitTest`).
 2. Install and try it on the phone (section 5); read the packet back after using the UI.

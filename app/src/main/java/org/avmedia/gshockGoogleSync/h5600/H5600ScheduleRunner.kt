@@ -18,6 +18,7 @@ import org.avmedia.gshockGoogleSync.services.LocationProvider
 import org.avmedia.gshockGoogleSync.session.SessionPhase
 import org.avmedia.gshockGoogleSync.utils.AppTimeFormat
 import org.avmedia.gshockapi.model.SmartAlarm
+import org.avmedia.gshockapi.model.SoundMode
 import timber.log.Timber
 import java.time.Duration
 import java.time.LocalDate
@@ -303,6 +304,9 @@ class H5600ScheduleRunner @Inject constructor(
         record(notes)
     }
 
+    /** The sound mode the scheduler last set (every open tab's view model follows it). */
+    val soundModeSet = kotlinx.coroutines.flow.MutableStateFlow<SoundMode?>(null)
+
     /** Called after each alarm pass (one-time alarm switched off, snooze window started or ended). */
     @Volatile var onPoolChanged: (() -> Unit)? = null
 
@@ -396,6 +400,8 @@ class H5600ScheduleRunner @Inject constructor(
                 val desired = AlarmPool.desiredSoundMode(pool, now, base)
                 val before = api.setSoundMode(desired) // one read; no write if already equal
                 if (before != desired) notes += "sound ${before ?: "?"} → $desired"
+                org.avmedia.gshockGoogleSync.utils.LastKnown.put(context, "sound_mode", desired.code) // Custom tab shows it
+                soundModeSet.value = desired
             }
         }
         showSnoozing(AlarmPool.snoozing(pool, now).map { it.first })
