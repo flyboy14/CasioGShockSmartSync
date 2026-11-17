@@ -243,7 +243,7 @@ class HealthViewModel @Inject constructor(
         org.avmedia.gshockGoogleSync.h5600.H5600Steps.cached()?.let { return it }
         val result = api.getH5600LifeLog() ?: return StepCounterData.unavailable()
         return org.avmedia.gshockGoogleSync.h5600.H5600Steps
-            .toStepCounterData(result, java.time.ZoneId.systemDefault())
+            .merge(appContext, result, java.time.ZoneId.systemDefault())
             .also { org.avmedia.gshockGoogleSync.h5600.H5600Steps.store(it, context = appContext) }
     }
 
@@ -286,7 +286,7 @@ class HealthViewModel @Inject constructor(
                             withSteps.withStepMetrics(stepData)
                         }
                     }
-                }
+                }.onFailure { timber.log.Timber.e(it, "Step refresh failed") }
             } while (stepFetchPending) } finally { _isRefreshing.value = false }
         }
     }

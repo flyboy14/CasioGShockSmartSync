@@ -28,13 +28,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.avmedia.gshockGoogleSync.R
 import org.avmedia.gshockGoogleSync.theme.GShockSmartSyncTheme
-import org.avmedia.gshockGoogleSync.ui.common.AppButton
 import org.avmedia.gshockGoogleSync.ui.common.ScreenTitle
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun HealthScreen() {
-    var showProfileDialog by remember { mutableStateOf(false) }
     val healthViewModel: HealthViewModel = androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel()
     val isRefreshing by healthViewModel.isRefreshing.collectAsState()
 
@@ -81,15 +79,8 @@ fun HealthScreen() {
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    // Profile button — opens exercise profile dialog
-                    AppButton(
-                        text = stringResource(id = R.string.profile),
-                        onClick = { showProfileDialog = true },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                    )
-
+                    // Profile button removed: the DW-H5600 does not accept the exercise profile
+                    // (0x2D rejected, 0x45 writes dropped; tested 2026-11-17).
                     Spacer(modifier = Modifier.height(16.dp))
                 }
                 }
@@ -97,12 +88,6 @@ fun HealthScreen() {
         }
     }
 
-    // Exercise profile dialog — shown when user taps the Profile button
-    if (showProfileDialog) {
-        ProfileDialog(
-            onDismiss = { showProfileDialog = false }
-        )
-    }
 }
 
 @Preview(showBackground = true)

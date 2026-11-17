@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Divider
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -92,11 +94,29 @@ fun StepCounterView(
             SectionLabel(text = stringResource(id = R.string.hourly))
             Spacer(modifier = Modifier.height(8.dp))
 
-            val hourly = state.stepCounterData.hourlySteps.filterNotNull().takeLast(10)
-            if (hourly.isEmpty() || hourly.all { it == 0 }) {
+            // All 24 hours (midnight to now; later hours empty), scrollable, opened at the current hour.
+            val hourlyKnown = state.stepCounterData.hourlySteps
+            if (hourlyKnown.isEmpty()) {
                 EmptyHistory()
             } else {
-                StepsBarChart(values = hourly, labels = hourlyTimeLabels(hourly.size))
+                val hourly: List<Int?> = (0 until 24).map { h -> hourlyKnown.getOrNull(h) }
+                val scroll = androidx.compose.foundation.rememberScrollState()
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val nowHour = (hourlyKnown.size - 1).coerceIn(0, 23)
+                // Keyed on maxValue too: before the row is measured maxValue is 0 and scrollTo clamps to 0.
+                androidx.compose.runtime.LaunchedEffect(nowHour, scroll.maxValue) {
+                    // Current hour at the right edge, ~8 hours visible before it.
+                    val step = with(density) { (HOURLY_BAR + HOURLY_GAP).toPx() }
+                    scroll.scrollTo(((nowHour - 7) * step).toInt().coerceAtLeast(0))
+                }
+                Box(modifier = Modifier.fillMaxWidth().horizontalScroll(scroll)) {
+                    StepsBarChart(
+                        values = hourly,
+                        labels = (0 until 24).map { hourLabel(it) },
+                        barWidth = HOURLY_BAR,
+                        nullText = "",
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -107,8 +127,9 @@ fun StepCounterView(
             SectionLabel(text = stringResource(id = R.string.daily))
             Spacer(modifier = Modifier.height(8.dp))
 
-            val dailyHistory = state.stepCounterData.dailyHistory.filterNotNull().takeLast(6)
-            val daily = dailyHistory + (state.stepCounterData.currentDaySteps ?: 0)
+            // Past days the phone has no data for are shown as "–" (not 0).
+            val dailyHistory = state.stepCounterData.dailyHistory.takeLast(6)
+            val daily: List<Int?> = dailyHistory + (state.stepCounterData.currentDaySteps ?: 0)
             if (daily.isEmpty()) {
                 EmptyHistory()
             } else {
@@ -206,25 +227,31 @@ private fun StepsProgressRing(
     }
 }
 
+private val HOURLY_BAR = 32.dp
+private val HOURLY_GAP = 8.dp
+
+/** Bar chart; null = no data (no bar, [nullText] above). [barWidth] set = fixed width (for scrolling). */
 @Composable
 private fun StepsBarChart(
-    values: List<Int>,
+    values: List<Int?>,
     labels: List<String>,
     modifier: Modifier = Modifier,
+    barWidth: androidx.compose.ui.unit.Dp? = null,
+    nullText: String = "–",
 ) {
     val barColor = MaterialTheme.colorScheme.primary
     val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
-    val maxValue = (values.maxOrNull() ?: 1).coerceAtLeast(1)
+    val maxValue = (values.filterNotNull().maxOrNull() ?: 1).coerceAtLeast(1)
+    val sized = if (barWidth != null) modifier.width((barWidth + HOURLY_GAP) * values.size + 16.dp) else modifier.fillMaxWidth()
 
     Canvas(
-        modifier = modifier
-            .fillMaxWidth()
+        modifier = sized
             .height(140.dp)
             .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         val spacing = 8.dp.toPx()
         val totalSpacing = spacing * (values.size - 1)
-        val barWidth = (size.width - totalSpacing) / values.size
+        val barWidth = barWidth?.toPx() ?: ((size.width - totalSpacing) / values.size)
         val topLabelSpace = 16.dp.toPx()
         val bottomLabelSpace = 18.dp.toPx()
         val chartHeight = size.height - topLabelSpace - bottomLabelSpace
@@ -236,11 +263,11 @@ private fun StepsBarChart(
         }
 
         values.forEachIndexed { index, value ->
-            val barHeight = (value.toFloat() / maxValue) * chartHeight
+            val barHeight = ((value ?: 0).toFloat() / maxValue) * chartHeight
             val left = index * (barWidth + spacing)
             val top = topLabelSpace + (chartHeight - barHeight)
 
-            drawRoundRect(
+            if (value != null) drawRoundRect(
                 color = barColor,
                 topLeft = Offset(left, top),
                 size = Size(barWidth, barHeight.coerceAtLeast(4.dp.toPx())),
@@ -248,7 +275,7 @@ private fun StepsBarChart(
             )
 
             drawIntoCanvas { canvas ->
-                canvas.nativeCanvas.drawText(value.toString(), left + barWidth / 2f, top - 4.dp.toPx(), paint)
+                canvas.nativeCanvas.drawText(value?.toString() ?: nullText, left + barWidth / 2f, top - 4.dp.toPx(), paint)
                 canvas.nativeCanvas.drawText(labels[index], left + barWidth / 2f, size.height - 2.dp.toPx(), paint)
             }
         }
@@ -267,17 +294,10 @@ private fun EmptyHistory() {
     }
 }
 
-private fun hourlyTimeLabels(count: Int): List<String> {
-    val calendar = Calendar.getInstance()
-    return List(count) { i ->
-        calendar.timeInMillis = System.currentTimeMillis()
-        calendar.add(Calendar.HOUR_OF_DAY, -(count - 1 - i))
-        val hour = calendar.get(Calendar.HOUR)
-        val amPm = if (calendar.get(Calendar.AM_PM) == Calendar.AM) "a" else "p"
-        val displayHour = if (hour == 0) 12 else hour
-        "$displayHour$amPm"
-    }
-}
+/** "12a", "1a" … "11p" (or "0" … "23" in 24-hour mode). */
+private fun hourLabel(hour: Int): String =
+    if (org.avmedia.gshockGoogleSync.utils.AppTimeFormat.current()) hour.toString()
+    else (if (hour % 12 == 0) 12 else hour % 12).toString() + (if (hour < 12) "a" else "p")
 
 private fun dailyLabels(count: Int): List<String> {
     val calendar = Calendar.getInstance()
