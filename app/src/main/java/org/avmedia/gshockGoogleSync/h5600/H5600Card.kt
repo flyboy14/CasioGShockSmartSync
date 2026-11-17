@@ -18,6 +18,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -283,7 +284,12 @@ private fun SunWeatherCard(vm: H5600ViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 AppText(text = "Weather now: ${s.realWeather}", fontSize = 13.sp, modifier = Modifier.weight(1f))
-                org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(text = "Refresh", onClick = { vm.refreshSunWeather() })
+                androidx.compose.material3.IconButton(onClick = { vm.refreshSunWeather() }) {
+                    androidx.compose.material3.Icon(
+                        androidx.compose.material.icons.Icons.Filled.Refresh,
+                        contentDescription = "Refresh weather and send to the watch",
+                    )
+                }
             }
             AppText(text = "Watch should show: ${s.watchShould}", fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
             if (s.tempSun) {
