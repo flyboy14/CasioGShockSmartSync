@@ -264,6 +264,8 @@ private fun SunWeatherCard(vm: H5600ViewModel) {
                 "E.g. 1:18 = sunny 18 °C. Sunset stays real. Updates every ${TempSun.REFRESH_MIN} min while connected.<br><br>" +
                 "Real today and Weather now are the real values for the phone's location (Open-Meteo); " +
                 "Watch should show is what the watch's sun screen should read now.<br><br>" +
+                "Refresh fetches the weather now and sends location and time to the watch (the app also does " +
+                "this every ${TempSun.REFRESH_MIN} min and on every connection).<br><br>" +
                 "Fine-tune: if the top line is 1 min too low, press + on top; if sunset is 1 min late, press − on sunset.")
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -281,7 +283,7 @@ private fun SunWeatherCard(vm: H5600ViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 AppText(text = "Weather now: ${s.realWeather}", fontSize = 13.sp, modifier = Modifier.weight(1f))
-                org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(text = "Refresh", onClick = { vm.refreshWeatherOnly() })
+                org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(text = "Refresh", onClick = { vm.refreshSunWeather() })
             }
             AppText(text = "Watch should show: ${s.watchShould}", fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
             if (s.tempSun) {
@@ -307,11 +309,6 @@ private fun SunWeatherCard(vm: H5600ViewModel) {
                     }
                 }
             }
-            org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(
-                text = "Send loc/time",
-                onClick = { vm.sendLocation() },
-                modifier = Modifier.padding(top = 12.dp),
-            )
         }
     }
 }

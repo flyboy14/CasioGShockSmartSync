@@ -363,12 +363,22 @@ class H5600ViewModel @Inject constructor(
     }
 
     /** Fetch the weather for display only (nothing is written to the watch). */
-    fun refreshWeatherOnly() = run("refresh weather") {
-        val loc = org.avmedia.gshockGoogleSync.services.LocationProvider.getLocation(context) ?: error("no location")
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            TempSun.fetchTemperature(context, loc.latitude, loc.longitude)
+    /**
+     * Refresh: fetch the weather now, then send location + time to the watch so its sun screen is
+     * recalculated (with the weather encoded when "Weather instead of sunrise" is on).
+     */
+    fun refreshSunWeather() = run("refresh") {
+        val msg = if (TempSun.isEnabled(context)) runner.refreshTempSun(force = true)
+        else {
+            val loc = org.avmedia.gshockGoogleSync.services.LocationProvider.getLocation(context) ?: error("no location")
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                TempSun.fetchTemperature(context, loc.latitude, loc.longitude)
+            }
+            runner.syncLocationAndTime()
+            "weather fetched, location and time sent"
         }
         reloadPrefs()
+        msg?.let { AppSnackbar(it) }
     }
 
     /** On: the face follows the sunset window right away. Off: the face stays as it is. */
@@ -411,11 +421,6 @@ class H5600ViewModel @Inject constructor(
      * location packet is not enough: a full time sync (Fine Adjustment and time-zone option as on
      * the Time tab) with the location written inside it.
      */
-    fun sendLocation() = run("send location") {
-        runner.syncLocationAndTime()
-        AppSnackbar("Sunrise/sunset: location sent, time synced")
-    }
-
     private fun run(what: String, onError: () -> Unit = {}, block: suspend () -> Unit) {
         _state.update { it.copy(busy = running.incrementAndGet() > 0) }
         viewModelScope.launch {
