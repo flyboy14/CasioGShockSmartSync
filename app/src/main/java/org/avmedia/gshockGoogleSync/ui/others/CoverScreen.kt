@@ -101,12 +101,25 @@ private fun RideToUnlock(onUnlock: () -> Unit) {
                             },
                             onDragEnd = {
                                 held = false; leftPull = 0f; finger = 0f // let the spin finish its turn
+                                val wentLeft = offset.value < 0f
                                 if (kotlin.math.abs(offset.value) >= rideDistancePx && !unlocked) { // either direction unlocks
                                     unlocked = true
                                     unlockBuzz(context) // no beep: a short vibration confirms the unlock
-                                    onUnlock()
+                                    if (wentLeft) {
+                                        // Ridden left: it launches back to the right and flies off the screen
+                                        // (texts fly off to the left), then the app opens.
+                                        val past = context.resources.displayMetrics.widthPixels * 1.2f
+                                        scope.launch {
+                                            offset.animateTo(past, androidx.compose.animation.core.tween(350, easing = androidx.compose.animation.core.FastOutLinearInEasing))
+                                            onUnlock()
+                                        }
+                                    } else {
+                                        onUnlock()
+                                        scope.launch { offset.animateTo(0f) }
+                                    }
+                                } else {
+                                    scope.launch { offset.animateTo(0f) }
                                 }
-                                scope.launch { offset.animateTo(0f) }
                             },
                             onDragCancel = { held = false; leftPull = 0f; finger = 0f; scope.launch { offset.animateTo(0f) } },
                         )
