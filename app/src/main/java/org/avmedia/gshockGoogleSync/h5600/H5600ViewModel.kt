@@ -76,6 +76,18 @@ class H5600ViewModel @Inject constructor(
     // Watch actions run one after another in tap order, without blocking the UI: each change is
     // shown at once (optimistic), [busy] only drives the pull-to-refresh spinner.
     private val queue = kotlinx.coroutines.sync.Mutex()
+
+    // Settings with a user change on its way to the watch. A read queued before the change (e.g. the
+    // tab-open refresh) must not put the old value back on screen while the write is still pending.
+    private val writing = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** Optimistic write of one setting: [key] is protected from older reads until [block] finishes. */
+    private fun write(key: String, what: String, onError: () -> Unit, block: suspend () -> Unit) {
+        writing += key
+        run(what, onError) { try { block() } finally { writing -= key } }
+    }
+
+    private fun <T> fresh(key: String, read: T?, shown: T?): T? = if (key in writing) shown else read ?: shown
     private val running = java.util.concurrent.atomic.AtomicInteger(0)
 
     init {
@@ -164,13 +176,14 @@ class H5600ViewModel @Inject constructor(
             val hr = readOrNull { api.getH5600HeartRateMonitorCode() }
             Timber.i("H5600 re-read: 0x42=$hex mode=$mode face=$code")
             _state.update {
+                val faceCode = fresh(KEY_FACE, code, it.watchFaceCode)
                 it.copy(
-                    soundMode = mode ?: it.soundMode,
+                    soundMode = fresh(KEY_SOUND, mode, it.soundMode),
                     soundHex = hex ?: it.soundHex,
-                    watchFaceCode = code ?: it.watchFaceCode,
-                    watchFace = (code ?: it.watchFaceCode)?.let(WatchFaceItem::fromCode),
-                    faceNumber = faceNo ?: it.faceNumber,
-                    hrMonitorCode = hr ?: it.hrMonitorCode,
+                    watchFaceCode = faceCode,
+                    watchFace = if (KEY_FACE in writing) it.watchFace else faceCode?.let(WatchFaceItem::fromCode),
+                    faceNumber = fresh(KEY_FACE_NO, faceNo, it.faceNumber),
+                    hrMonitorCode = fresh(KEY_HR, hr, it.hrMonitorCode),
                 )
             }
             mode?.let { m -> org.avmedia.gshockGoogleSync.utils.LastKnown.put(context, "sound_mode", m.code) }
@@ -202,7 +215,7 @@ class H5600ViewModel @Inject constructor(
         H5600Prefs.setBaseSoundMode(context, mode)
         val previous = _state.value.soundMode
         _state.update { it.copy(soundMode = mode) } // move the UI immediately
-        run("set sound mode", onError = { _state.update { it.copy(soundMode = previous) } }) {
+        write(KEY_SOUND, "set sound mode", onError = { _state.update { it.copy(soundMode = previous) } }) {
             api.setSoundMode(mode)
             val v = confirm(mode) { api.getSoundMode() } // confirm from the watch
             _state.update { it.copy(soundMode = v) }
@@ -213,7 +226,7 @@ class H5600ViewModel @Inject constructor(
     fun setFaceNumber(face: Int) {
         val previous = _state.value.faceNumber
         _state.update { it.copy(faceNumber = face) }
-        run("switch watch face", onError = { _state.update { it.copy(faceNumber = previous) } }) {
+        write(KEY_FACE_NO, "switch watch face", onError = { _state.update { it.copy(faceNumber = previous) } }) {
             api.setH5600WatchFaceNumber(face)
             val f: Int? = confirm(face) { api.getH5600WatchFaceNumber() }
             _state.update { it.copy(faceNumber = f) }
@@ -224,7 +237,7 @@ class H5600ViewModel @Inject constructor(
     fun setWatchFace(item: WatchFaceItem) {
         val previous = _state.value.watchFace
         _state.update { it.copy(watchFace = item) }
-        run("set watch face", onError = { _state.update { it.copy(watchFace = previous) } }) {
+        write(KEY_FACE, "set watch face", onError = { _state.update { it.copy(watchFace = previous) } }) {
             api.setWatchFaceItem(item)
             val code = confirm(item.code) { api.getWatchFaceCode() }
             _state.update { it.copy(watchFaceCode = code, watchFace = WatchFaceItem.fromCode(code)) }
@@ -248,7 +261,7 @@ class H5600ViewModel @Inject constructor(
                     modeList = modes ?: it.modeList, knownModes = known,
                     basic = basic ?: it.basic, physical = physical ?: it.physical,
                     stepGoal = goal ?: it.stepGoal,
-                    hrMonitorCode = hr ?: it.hrMonitorCode,
+                    hrMonitorCode = fresh(KEY_HR, hr, it.hrMonitorCode),
                 )
             }
         }
@@ -332,7 +345,7 @@ class H5600ViewModel @Inject constructor(
     fun setHeartRateMonitor(mode: HeartRateMonitor) {
         val previous = _state.value.hrMonitorCode
         _state.update { it.copy(hrMonitorCode = mode.code) }
-        run("set heart-rate monitor", onError = { _state.update { it.copy(hrMonitorCode = previous) } }) {
+        write(KEY_HR, "set heart-rate monitor", onError = { _state.update { it.copy(hrMonitorCode = previous) } }) {
             writeHeartRateMonitor(mode)
         }
     }
@@ -473,6 +486,10 @@ class H5600ViewModel @Inject constructor(
     companion object {
         private const val KEY_HR_BEFORE_ALL_DAY = "hr_before_all_day"
         private const val KEY_KNOWN_MODES = "h5600_known_modes"
+        private const val KEY_FACE = "face"
+        private const val KEY_FACE_NO = "face_no"
+        private const val KEY_SOUND = "sound"
+        private const val KEY_HR = "hr"
         const val TIME_AND_DATE = 0x01
         // The user's DW-H5600 list as first read (2026-11-17), before anything was hidden.
         private val DEFAULT_MODES = listOf(0x01, 0x0F, 0x0E, 0x11, 0x10, 0x02, 0x08, 0x09, 0x0A, 0x03, 0x05, 0x06)

@@ -108,6 +108,10 @@ Always:
 
 - `run(what, onError = { restore previous state }) { … }` — one queue for all watch writes, snackbar on
   failure, the previous value restored.
+- Optimistic writes go through `write(key, …)`, not bare `run`: while a write is pending, a read that
+  was queued before it (the refresh when a tab opens) must not put the old value back on screen —
+  `fresh(key, read, shown)` keeps what is shown. Without it the old item flashed for a few seconds
+  (Auto → Sun showed Steps first).
 - Reads go through `readOrNull { … }` (12 s timeout, no crash); a failed read keeps the last value.
 - Values that should show instantly after a restart go to `LastKnown` (`utils/LastKnown.kt`) and are
   the `UiState` defaults.
