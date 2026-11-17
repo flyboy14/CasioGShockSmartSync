@@ -127,15 +127,15 @@ Button tone and vibration, auto light, illumination period, power saving — eac
 ### The fun bits
 
 <p align="center">
-  <img src="docs/screenshots/01_cover.png" width="220" alt="Cover screen">
-  <img src="docs/screenshots/02_start_screen.png" width="220" alt="Start screen with greeting">
-  <img src="docs/screenshots/11_pull_up_to_lock.png" width="220" alt="Pull up to lock">
+  <img src="docs/screenshots/02_start_screen.png" width="220" alt="Start screen with the greeting ticker">
+  <img src="docs/screenshots/01_cover.png" width="220" alt="Cover screen: Ride to unlock">
+  <img src="docs/screenshots/09_custom_3.png" width="220" alt="Greeting and ride settings at the bottom of the Custom tab">
 </p>
 
+- **Start screen greeting** — shown while the app waits for the watch, optionally as a stepping LED ticker. Tap *Connected* on the cover to see it. Change the text and switch the ticker on at the bottom of the Custom tab.
 - **Ride to unlock.** The app opens on a cover screen: drag the ride sideways to get in. It accelerates past your finger; pulled left it spins (faster the further you pull) and, released, launches off the right edge before the app opens.
-- **What are we riding?** — any text up to 14 characters, emoji welcome. 🚲 by default.
+- **What are we riding?** — any text up to 14 characters, emoji welcome. 🚲 by default. Set it at the bottom of the Custom tab.
 - **Pull up to lock** — on any tab already at the bottom, keep pulling up: a lock appears above the tab bar, release to lock. Or use the *Lock* button.
-- **Start screen greeting** — shown while the app waits for the watch, optionally as a stepping LED ticker. Tap *Connected* on the cover to see it.
 - The app reopens on the tab you used last, and stays upright (portrait only).
 
 ---
