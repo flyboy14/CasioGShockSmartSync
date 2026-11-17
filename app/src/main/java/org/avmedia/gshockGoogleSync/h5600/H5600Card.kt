@@ -72,7 +72,8 @@ private fun FindPhoneCard() {
     }
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
-            AppTextLarge(text = "Find Phone")
+            CardTitle("Find Phone", "Pressing Find Phone on the watch rings this phone; pressing back on the " +
+                "watch stops it. It plays on the alarm channel, so it rings even in silent mode. Lift the phone to stop.")
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -134,11 +135,6 @@ private fun FindPhoneCard() {
                     onClick = { org.avmedia.gshockGoogleSync.ui.actions.PhoneFinder.stop(context) },
                 )
             }
-            AppText(
-                text = "Plays on the alarm channel, so it rings even in silent mode. Lift the phone to stop.",
-                fontSize = 13.sp,
-                modifier = Modifier.padding(top = 4.dp),
-            )
         }
     }
 }
@@ -198,7 +194,13 @@ private fun WatchFaceCard(vm: H5600ViewModel) {
     }
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
-            AppTextLarge(text = "Watch face")
+            CardTitle("Watch face", "Face 1 shows the weekday; Face 2 shows the item chosen below.<br><br>" +
+                "Auto: Steps all day, Sun data from the set time before sunset until ${SunFace.TRAIL_MIN} min after " +
+                "(− / + change the lead time). The phone switches the face exactly at both edges.<br><br>" +
+                "Weather instead of sunrise: the sun screen's top line shows W:TT, W = 1 sunny, 2 cloudy, " +
+                "3 rain/snow, 4 extreme (heavy rain, storm, gusts ≥ 60 km/h); TT = °C (0–59). E.g. 1:18 = sunny " +
+                "18 °C. Sunset stays real. Updates every ${TempSun.REFRESH_MIN} min while connected.<br><br>" +
+                "Fine-tune: if the top line is 1 min too low, press + on top; if sunset is 1 min late, press − on sunset.")
             // Real values to compare with the watch (phone location, Open-Meteo)
             AppText(text = "Real today: ${s.realSun}", fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
             AppText(text = "Weather now: ${s.realWeather}", fontSize = 13.sp)
@@ -246,11 +248,7 @@ private fun WatchFaceCard(vm: H5600ViewModel) {
                     }
                 }
             }
-            if (s.dynamicFace) AppText(
-                text = "Steps all day; Sun data from ${SunFace.formatLead(s.faceLeadMin)} before sunset until " +
-                    "${SunFace.TRAIL_MIN} min after. Today: ${s.sunsetText}",
-                fontSize = 13.sp,
-            )
+            if (s.dynamicFace) AppText(text = "Today: ${s.sunsetText}", fontSize = 13.sp)
             if (s.dynamicFace) Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -274,12 +272,7 @@ private fun WatchFaceCard(vm: H5600ViewModel) {
                 AppText(text = "Weather instead of sunrise")
                 AppSwitch(checked = s.tempSun, onCheckedChange = { vm.setTempSun(it) })
             }
-            AppText(
-                text = "Sun screen top line shows W:TT — W = 1 sunny, 2 cloudy, 3 rain/snow, 4 extreme (heavy rain, storm, gusts ≥ 60 km/h); TT = °C (0–59). " +
-                    "E.g. 1:18 = sunny 18 °C, 3:10 = rain 10 °C. Sunset stays real. " +
-                    "Updates every ${TempSun.REFRESH_MIN} min while connected. ${s.tempText}",
-                fontSize = 13.sp,
-            )
+            if (s.tempSun) AppText(text = s.tempText.replaceFirstChar { it.uppercase() }, fontSize = 13.sp)
             if (s.tempSun) {
                 // Fine-tune for the watch's own sun formula (measured: top +2, sunset -3)
                 listOf(
@@ -302,10 +295,6 @@ private fun WatchFaceCard(vm: H5600ViewModel) {
                         }
                     }
                 }
-                AppText(
-                    text = "If the watch shows the top line 1 min too low, press + on top; if sunset is 1 min late, press − on sunset.",
-                    fontSize = 12.sp,
-                )
             }
             org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(
                 text = "Send loc/time",
@@ -322,7 +311,10 @@ private fun SoundNotificationsCard(vm: H5600ViewModel) {
     val context = LocalContext.current
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
-            AppTextLarge(text = "Sound & notifications")
+            CardTitle("Sound & notifications", "Sound mode is the watch's own setting for all its sounds. " +
+                "Alarm days and Vibe only / Sound are set per alarm in the Alarms tab; the phone switches the sound " +
+                "mode for the alarm that is due next.<br><br>Notifications only from chosen apps: when on, only the " +
+                "checked apps reach the watch; when off, every app's notifications do.")
             // Sound mode
             AppText(
                 text = "Sound mode: " + (s.soundMode?.name?.replace('_', ' ') ?: if (s.busy) "reading…" else "unknown"),
@@ -355,7 +347,6 @@ private fun SoundNotificationsCard(vm: H5600ViewModel) {
                 AppText(text = "0x42: " + s.soundHex.ifEmpty { "…" }, fontSize = 13.sp)
                 org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(text = "Re-read", onClick = { vm.refresh() })
             }
-            AppText(text = "Alarm days and Vibe only / Sound are set per alarm in the Alarms tab.", fontSize = 13.sp, modifier = Modifier.padding(top = 12.dp))
             s.lastApplied?.let { AppText(text = "Last applied: $it", fontSize = 13.sp) }
             // Notification app filter
             var filter by remember { mutableStateOf(NotificationFilter.load(context)) }
@@ -388,10 +379,6 @@ private fun SoundNotificationsCard(vm: H5600ViewModel) {
                         .show()
                 } },
             )
-            AppText(
-                text = if (filter.enabled) "Only checked apps reach the watch." else "Off: every app's notifications reach the watch.",
-                fontSize = 13.sp,
-            )
         }
     }
 }
@@ -414,7 +401,6 @@ internal fun HeartRateMonitorCard(vm: H5600ViewModel) {
     if (!s.supported) return
     AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
         Column(modifier = Modifier.padding(12.dp)) {
-            AppTextLarge(text = "Heart-rate monitor")
             val options = listOf(
                 org.avmedia.gshockapi.model.HeartRateMonitor.ALL_DAY to
                     "All functions: daytime heart rate, calories, sleep evaluation. High battery use.",
@@ -422,18 +408,16 @@ internal fun HeartRateMonitorCard(vm: H5600ViewModel) {
                     "Only during activities and at night; no daytime heart rate. Moderate battery use.",
                 org.avmedia.gshockapi.model.HeartRateMonitor.OFF to "No heart-rate measurement. Lowest battery use.",
             )
+            CardTitle("Heart-rate monitor", options.joinToString("<br><br>") { (m, d) -> "${hrModeLabel(m)}: $d" } +
+                "<br><br>The Heart rate item on the watch face needs All day; the app asks when you pick it.")
             if (s.hrMonitorCode == null) org.avmedia.gshockGoogleSync.ui.common.LoadingSpinner()
             else Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
                 options.forEach { (m, _) ->
                     AppChoiceButton(text = hrModeLabel(m), selected = s.hrMonitor == m, onClick = { vm.setHeartRateMonitor(m) })
                 }
             }
-            AppText(
-                text = options.firstOrNull { it.first == s.hrMonitor }?.second
-                    ?: s.hrMonitorCode?.let { "Unknown mode (code 0x%02X)".format(it) } ?: "",
-                fontSize = 13.sp,
-                modifier = Modifier.padding(top = 4.dp),
-            )
+            if (s.hrMonitorCode != null && s.hrMonitor == null)
+                AppText(text = "Unknown mode (code 0x%02X)".format(s.hrMonitorCode), fontSize = 13.sp)
         }
     }
 }

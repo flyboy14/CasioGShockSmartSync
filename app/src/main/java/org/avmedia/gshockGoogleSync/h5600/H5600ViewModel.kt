@@ -258,11 +258,13 @@ class H5600ViewModel @Inject constructor(
         debouncedWrite("basic", "step reminder") { api.setH5600Basic(nb) }
     }
 
-    /** New mode order / visibility; Time & date always stays first. */
+    /** Saves a new mode order / visibility (one write); Time & date always stays first. */
     fun setModeList(modes: List<Int>) {
         val list = listOf(TIME_AND_DATE) + modes.filter { it != TIME_AND_DATE }
+        val before = _state.value.modeList
         _state.update { it.copy(modeList = list) }
-        debouncedWrite("modes", "watch modes") { api.setH5600ModeList(list) }
+        // One write per Save (the card keeps edits as a draft until then).
+        run("watch modes", onError = { _state.update { it.copy(modeList = before) } }) { api.setH5600ModeList(list) }
     }
 
     // Every mode the watch has listed, in first-seen order (hidden modes vanish from 0x52).

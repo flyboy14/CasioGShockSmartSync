@@ -21,6 +21,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.input.pointer.pointerInput
@@ -60,13 +63,44 @@ private fun WatchModesCard(vm: H5600ViewModel) {
     var dragY by remember { mutableStateOf(0f) }
     val heights = remember { androidx.compose.runtime.mutableStateMapOf<Int, Int>() }
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    SettingsCard("Watch modes") {
+    // Collapsed by default (the list is long); tap the header to open or close it.
+    var expanded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
+      Column(modifier = Modifier.padding(12.dp)) {
         val list = s.modeList
-        if (list == null) { LoadingSpinner(); return@SettingsCard }
-        AppText(text = "Hold and drag to reorder. Switch off the modes you do not use.", fontSize = 13.sp)
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                CardTitle("Watch modes", "The order the mode button goes through on the watch. Tap the header to open " +
+                    "the list, hold a mode and drag it to reorder, switch off the modes you do not use, then Save: " +
+                    "the list is sent to the watch once. Time & date always stays first; hidden modes stay listed " +
+                    "here to bring back.")
+                list?.let { l ->
+                    val hiddenCount = s.knownModes.count { it !in l }
+                    AppText(text = "${l.size} shown" + if (hiddenCount > 0) ", $hiddenCount hidden" else "", fontSize = 13.sp)
+                }
+            }
+            androidx.compose.material3.Icon(
+                if (expanded) androidx.compose.material.icons.Icons.Filled.KeyboardArrowUp
+                else androidx.compose.material.icons.Icons.Filled.KeyboardArrowDown,
+                contentDescription = if (expanded) "Hide" else "Show",
+            )
+        }
+        if (list == null) { LoadingSpinner(); return@Column }
+        // Edits stay local (a draft) until Save, which sends the list to the watch once.
+        // Draft = every mode in one order + which are shown; switching a mode off keeps its row in place.
+        val fromWatch = list.filter { it != H5600ViewModel.TIME_AND_DATE }
+        val allModes = fromWatch + s.knownModes.filter { it !in list && it != H5600ViewModel.TIME_AND_DATE }
+        var order by remember(list, s.knownModes) { mutableStateOf(allModes) }
+        var shown by remember(list) { mutableStateOf(fromWatch.toSet()) }
+        val result = order.filter { it in shown }
+        val dirty = result != fromWatch
+        if (!expanded) return@Column
         val label = { code: Int -> org.avmedia.gshockapi.model.WatchMode.fromCode(code)?.label ?: "Mode 0x%02X".format(code) }
-        val movable = list.filter { it != H5600ViewModel.TIME_AND_DATE }
-        val hidden = s.knownModes.filter { it !in list }
+        val movable = order
 
         ModeRow(label(H5600ViewModel.TIME_AND_DATE), null) {}
 
@@ -85,7 +119,7 @@ private fun WatchModesCard(vm: H5600ViewModel) {
             }
             val shift by androidx.compose.animation.core.animateFloatAsState(makeRoom, label = "modeRoom")
             ModeRow(
-                label(code), true,
+                label(code), code in shown,
                 modifier = Modifier
                     .onGloballyPositioned { heights[i] = it.size.height }
                     .zIndex(if (dragging) 1f else 0f)
@@ -105,14 +139,22 @@ private fun WatchModesCard(vm: H5600ViewModel) {
                             onDragEnd = {
                                 val to = dropIndex(i, dragY, movable.indices.map { heights[it] ?: 0 }, 0f)
                                 dragIndex = -1; dragY = 0f
-                                if (to != i) vm.setModeList(movable.toMutableList().apply { add(to, removeAt(i)) })
+                                if (to != i) order = movable.toMutableList().apply { add(to, removeAt(i)) }
                             },
                             onDragCancel = { dragIndex = -1; dragY = 0f },
                         )
                     },
-            ) { vm.setModeList(movable - code) }
+            ) { shown = if (code in shown) shown - code else shown + code }
         } }
-        hidden.forEach { code -> ModeRow(label(code), false) { vm.setModeList(movable + code) } }
+        if (dirty) Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+        ) {
+            AppSmallButton(text = "Discard", onClick = { order = allModes; shown = fromWatch.toSet() })
+            AppChoiceButton(text = "Save to watch", selected = false, compact = true, enabled = true,
+                onClick = { vm.setModeList(result) })
+        }
+      }
     }
 }
 
@@ -165,12 +207,24 @@ fun SportScreen(vm: H5600ViewModel = hiltViewModel()) {
 }
 
 @Composable
-private fun SettingsCard(title: String, content: @Composable () -> Unit) {
+private fun SettingsCard(title: String, info: String? = null, content: @Composable () -> Unit) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
         Column(modifier = Modifier.padding(12.dp)) {
-            AppTextLarge(text = title)
+            CardTitle(title, info)
             content()
         }
+    }
+}
+
+/**
+ * Card header used by every DW-H5600 card: the title, and an (i) button with the explanation
+ * when there is one. Explanations go here, not as text in the card; the card shows values only.
+ */
+@Composable
+internal fun CardTitle(title: String, info: String? = null, modifier: Modifier = Modifier) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        AppTextLarge(text = title)
+        if (info != null) org.avmedia.gshockGoogleSync.ui.common.InfoButton(infoText = info, dialogTitle = title)
     }
 }
 
@@ -214,10 +268,10 @@ private fun <T> Choices(options: List<Pair<T, String>>, selected: T?, perRow: In
 @Composable
 private fun HeartRateExtrasCard(vm: H5600ViewModel) {
     val s by vm.state.collectAsState()
-    SettingsCard("Heart-rate values") {
+    SettingsCard("Heart-rate values", "Used by the watch for heart-rate zones, calories and recovery. " +
+        "Auto = the watch's own estimate; switch on to set your own value. VO2max is measured by the watch.") {
         val p = s.physical
         if (p == null) { LoadingSpinner(); return@SettingsCard }
-        AppText(text = "Used for zones, calories and recovery. Auto = the watch's own estimate.", fontSize = 13.sp)
         SwitchRow("Max heart rate: ${p.maxHr} bpm" + if (p.maxHrManual) "" else " (auto)", p.maxHrManual) {
             vm.setPhysical(p.copy(maxHrManual = it))
         }
@@ -230,7 +284,7 @@ private fun HeartRateExtrasCard(vm: H5600ViewModel) {
         if (p.restingHrManual) StepperRow("Resting heart rate", {
             vm.setPhysical(p.copy(restingHr = (p.restingHr - 1).coerceAtLeast(30)))
         }, { vm.setPhysical(p.copy(restingHr = (p.restingHr + 1).coerceAtMost(120))) })
-        AppText(text = "VO2max (measured by the watch): ${p.vo2Max}", fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+        AppText(text = "VO2max: ${p.vo2Max}", fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
@@ -238,7 +292,9 @@ private fun HeartRateExtrasCard(vm: H5600ViewModel) {
 @Composable
 private fun StepGoalCard(vm: H5600ViewModel) {
     val s by vm.state.collectAsState()
-    SettingsCard("Daily step goal") {
+    SettingsCard("Daily step goal", "The goal on the watch (also the goal on the Health tab). " +
+        "Notify: the watch alerts you when you reach it. Step reminder: the watch alerts you when you " +
+        "have not moved for a while.") {
         val g = s.stepGoal
         if (g == null) { LoadingSpinner(); return@SettingsCard }
         StepperRow("%,d steps".format(g.steps), {
@@ -246,7 +302,7 @@ private fun StepGoalCard(vm: H5600ViewModel) {
         }, { vm.setStepGoal(g.copy(steps = (g.steps + 500).coerceAtMost(99_500))) })
         SwitchRow("Notify when the goal is reached", g.notifyWhenReached) { vm.setStepGoal(g.copy(notifyWhenReached = it)) }
         s.basic?.let { b ->
-            SwitchRow("Step reminder (when you have not moved for a while)", b.stepReminder) { vm.setStepReminder(it) }
+            SwitchRow("Step reminder", b.stepReminder) { vm.setStepReminder(it) }
         }
     }
 }
@@ -257,14 +313,11 @@ private fun StepGoalCard(vm: H5600ViewModel) {
 private fun NightTimeCard(vm: H5600ViewModel) {
     val s by vm.state.collectAsState()
     var picking by remember { mutableStateOf<Boolean?>(null) } // true = start, false = end
-    SettingsCard("Night time") {
+    SettingsCard("Night time", "Your usual sleep time. The watch uses it for sleep tracking and night-time " +
+        "heart rate, and to keep notifications quiet at night. It is stored twice on the watch (basic settings " +
+        "and sleep settings); saving here sets both.") {
         val b = s.basic
         if (b == null) { LoadingSpinner(); return@SettingsCard }
-        AppText(
-            text = "Your usual sleep time. The watch uses it for sleep tracking and night-time heart rate, " +
-                "and to keep notifications quiet at night.",
-            fontSize = 13.sp,
-        )
         val fmt = { h: Int, m: Int -> AppTimeFormat.format(java.time.LocalTime.of(h, m)) }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             AppSmallButton(text = "From ${fmt(b.nightStartHour, b.nightStartMin)}", onClick = { picking = true })
