@@ -36,8 +36,10 @@ object AlarmPool {
         lastRing(a, now)?.let { holdEnd(a, it).isAfter(now) } == true
 
     /**
-     * Alarms that may be snoozing right now: snooze on, rang within the snooze window, not stopped
-     * from the phone. The watch does not report snooze state, so this is the phone's best guess.
+     * Alarms snoozing right now: snooze on, rang within the snooze window, not stopped from the
+     * phone. The watch does not report snooze state, but on the DW-H5600 a button press while it
+     * rings does not end the snooze — only the app does (or switching the alarm off on the watch,
+     * which nobody does half asleep) — so this is taken as fact.
      * Their last ring time comes with them.
      */
     fun snoozing(pool: List<PhoneAlarm>, now: LocalDateTime): List<Pair<PhoneAlarm, LocalDateTime>> =

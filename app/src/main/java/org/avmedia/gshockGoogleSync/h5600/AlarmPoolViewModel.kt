@@ -58,7 +58,7 @@ class H5600AlarmPoolViewModel @Inject constructor(
         val onWatch: Set<String> = emptySet(),
         val onWatchSmart: String? = null,
         val lastApplied: String? = null,
-        /** Alarms that may be snoozing on the watch right now (offer "Stop snooze"). */
+        /** Alarms snoozing on the watch right now (offer "Stop snooze"). */
         val snoozing: Set<String> = emptySet(),
     )
 

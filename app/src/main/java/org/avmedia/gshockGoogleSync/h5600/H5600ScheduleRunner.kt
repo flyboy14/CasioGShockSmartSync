@@ -114,8 +114,9 @@ class H5600ScheduleRunner @Inject constructor(
         }
     }
 
-    /** The "may be snoozing · Stop snooze" notification for each snoozing alarm. */
-    private fun showSnoozing(alarms: List<AlarmPool.PhoneAlarm>) = SnoozeNotifier.update(context, alarms)
+    /** The "snoozing until … · Stop snooze" notification for each snoozing alarm. */
+    private fun showSnoozing(snoozing: List<Pair<AlarmPool.PhoneAlarm, LocalDateTime>>) =
+        SnoozeNotifier.update(context, snoozing.map { (a, ring) -> a to AlarmPool.holdEnd(a, ring) })
 
     /** Stop snooze from a screen or the notification, in the background. */
     fun requestStopSnooze(id: String) = background("stop snooze") { stopSnooze(id) }
@@ -240,7 +241,7 @@ class H5600ScheduleRunner @Inject constructor(
     /**
      * A time sync cancels a running snooze on the watch (tested 2026-11-17: snoozed 12:10 alarm, a
      * time sync at 12:10:46, no repeat at 12:15). So automatic syncs wait while an alarm with snooze
-     * may still be snoozing; they catch up on the next quarter-hour tick after the window.
+     * is still snoozing; they catch up on the next quarter-hour tick after the window.
      */
     private fun snoozeActive(now: LocalDateTime = LocalDateTime.now()): Boolean =
         AlarmPool.load(context)?.let { AlarmPool.snoozing(it, now).isNotEmpty() } == true
@@ -251,8 +252,8 @@ class H5600ScheduleRunner @Inject constructor(
         watchCall("0x39 handshake") { withTimeout(15_000) { api.h5600ConnectionHandshake() } }
         // Smart Sync's connect routine rewrites the home / world-city packets (1D/1E/1F), which makes
         // the watch drop its sun location -> dashes. One loc/time sync per connection fixes it, and
-        // also counts as this quarter's sun re-send — unless an alarm may be snoozing (see above).
-        if (snoozeActive()) Timber.i("H5600: loc/time sync on connect postponed (alarm may be snoozing)")
+        // also counts as this quarter's sun re-send — unless an alarm is snoozing (see above).
+        if (snoozeActive()) Timber.i("H5600: loc/time sync on connect postponed (alarm snoozing)")
         else {
             // Weather due as well? Fetch it first, so this one sync carries it — instead of a second
             // full time sync from the weather refresh a few seconds later.
@@ -281,7 +282,7 @@ class H5600ScheduleRunner @Inject constructor(
         if (watchCall("stop snooze", notes) { syncTimeAndLocation() } == null) {
             // Not stopped: bring the button and the notification back so it can be tried again.
             record(notes)
-            showSnoozing(AlarmPool.snoozing(pool, now).map { it.first })
+            showSnoozing(AlarmPool.snoozing(pool, now))
             onPoolChanged?.invoke()
             org.avmedia.gshockGoogleSync.ui.common.AppSnackbar("Stop snooze did not reach the watch — try again")
             return@withLock
@@ -404,7 +405,7 @@ class H5600ScheduleRunner @Inject constructor(
                 soundModeSet.value = desired
             }
         }
-        showSnoozing(AlarmPool.snoozing(pool, now).map { it.first })
+        showSnoozing(AlarmPool.snoozing(pool, now))
         onPoolChanged?.invoke() // Alarms tab: on-watch tags, snooze buttons, one-time alarms switched off
         return ok != null
     }
