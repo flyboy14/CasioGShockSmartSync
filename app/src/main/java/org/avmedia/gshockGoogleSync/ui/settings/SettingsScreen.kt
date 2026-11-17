@@ -1,6 +1,8 @@
 package org.avmedia.gshockGoogleSync.ui.settings
 
 import android.annotation.SuppressLint
+import AppTextLarge
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,6 +80,7 @@ fun SettingsList() {
         // Time adjustment card removed: on the DW-H5600 it only held Fine Adjustment, now on the Time tab.
         GreetingCard()
         RideCard()
+        DisconnectCard(onDisconnect = settingsViewModel::disconnectWatch)
     }
 }
 
@@ -121,4 +124,40 @@ fun BottomRow(modifier: Modifier, settingsViewModel: SettingsViewModel = hiltVie
 @Composable
 fun PreviewSettingsScreen() {
     SettingsScreen()
+}
+
+/** Drops the watch connection, after a confirmation (it reconnects the usual way). */
+@Composable
+fun DisconnectCard(onDisconnect: () -> Unit) {
+    var confirm by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    org.avmedia.gshockGoogleSync.ui.common.AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AppTextLarge(text = "Watch connection")
+            org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(text = "Disconnect", onClick = { confirm = true })
+        }
+    }
+    if (confirm) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { androidx.compose.material3.Text("Disconnect the watch?") },
+            text = {
+                androidx.compose.material3.Text(
+                    "Alarm updates, the sound-mode schedule, Find Phone and notifications stop until the " +
+                        "watch connects again (it reconnects the usual way).",
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { confirm = false; onDisconnect() }) {
+                    androidx.compose.material3.Text("Disconnect")
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { confirm = false }) { androidx.compose.material3.Text("Cancel") }
+            },
+        )
+    }
 }

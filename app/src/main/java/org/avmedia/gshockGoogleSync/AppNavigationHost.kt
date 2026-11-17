@@ -36,7 +36,12 @@ fun AppNavigationHost(
             .padding(contentPadding)
     ) {
         val coverLocked by org.avmedia.gshockGoogleSync.ui.others.CoverLock.locked.collectAsState()
-        if (coverLocked) {
+        val startPeek by org.avmedia.gshockGoogleSync.ui.others.StartScreenPeek.shown.collectAsState()
+        if (startPeek) {
+            // "Connected" tapped on the cover: the start screen, watch still connected; Back returns.
+            androidx.activity.compose.BackHandler { org.avmedia.gshockGoogleSync.ui.others.StartScreenPeek.shown.value = false }
+            PreConnectionScreen()
+        } else if (coverLocked) {
             CoverScreen(
                 onUnlock = { org.avmedia.gshockGoogleSync.ui.others.CoverLock.unlock(); viewModel.showMainNavigation() },
                 isConnected = viewModel.repository.isConnected(),

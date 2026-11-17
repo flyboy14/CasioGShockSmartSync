@@ -2,6 +2,7 @@ package org.avmedia.gshockGoogleSync.ui.others
 
 import AppText
 import AppTextVeryLarge
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
@@ -178,6 +179,14 @@ private fun RideToUnlock(onUnlock: () -> Unit) {
     }
 }
 
+/**
+ * Tapping "Connected" on the cover: shows the start screen (watch picture, greeting) while the
+ * watch stays connected; Back returns to the cover.
+ */
+object StartScreenPeek {
+    val shown = kotlinx.coroutines.flow.MutableStateFlow(false)
+}
+
 /** "Lock" from the Settings tab: shows the cover screen until it is unlocked again. */
 object CoverLock {
     val locked = kotlinx.coroutines.flow.MutableStateFlow(false)
@@ -208,6 +217,7 @@ fun CoverScreen(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(end = 16.dp, bottom = 12.dp)
+                        .clickable { StartScreenPeek.shown.value = true }
                 ) {
                     AppText(
                         text = stringResource(

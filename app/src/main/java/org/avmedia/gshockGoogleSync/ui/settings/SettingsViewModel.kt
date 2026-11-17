@@ -64,6 +64,9 @@ constructor(
     val isModified: StateFlow<Boolean> = sessionManager.isPendingSaveFlow(ComponentId.SETTINGS)
         .stateIn(viewModelScope, SharingStarted.Eagerly, sessionManager.isPendingSave(ComponentId.SETTINGS))
 
+    /** Settings tab "Disconnect" (after confirmation): drops the watch connection. */
+    fun disconnectWatch() = api.disconnect()
+
     fun onSettingUpdated(setting: Setting) {
         updateSetting(setting)
         changes.update(snapshot())
