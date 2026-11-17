@@ -38,6 +38,8 @@ private fun RideToUnlock(onUnlock: () -> Unit) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     val rideDistancePx = with(density) { RIDE_DISTANCE.toPx() }
     val offset = remember { androidx.compose.animation.core.Animatable(0f) }
+    val textBack = remember { androidx.compose.animation.core.Animatable(0f) }
+    var launching by remember { androidx.compose.runtime.mutableStateOf(false) }
     val ride = remember { org.avmedia.gshockGoogleSync.ui.settings.RideEmoji.get(context) }
     // Dragging the wrong way (left): the bicycle spins, faster the further it is pulled, with a
     // short buzz per full turn; on release it finishes the turn and stops upright.
@@ -75,7 +77,10 @@ private fun RideToUnlock(onUnlock: () -> Unit) {
 
     androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
         // Both texts move left exactly as far as the bicycle moves right (and spring back with it).
-        val counter = Modifier.offset { androidx.compose.ui.unit.IntOffset(-offset.value.toInt(), 0) }
+        // While launching after a left ride the texts return home instead of following the ride.
+        val counter = Modifier.offset {
+            androidx.compose.ui.unit.IntOffset((if (launching) textBack.value else -offset.value).toInt(), 0)
+        }
         AppTextVeryLarge(text = stringResource(R.string.cover_ride_to_unlock), modifier = counter)
         // The drag is measured on this box, which stays put: on the moving ride itself, an
         // accelerated ride outruns the finger and a left pull was read as a right ride.
@@ -110,6 +115,9 @@ private fun RideToUnlock(onUnlock: () -> Unit) {
                                         // (texts fly off to the left), then the app opens.
                                         val past = context.resources.displayMetrics.widthPixels * 1.2f
                                         scope.launch {
+                                            textBack.snapTo(-offset.value)
+                                            launching = true
+                                            launch { textBack.animateTo(0f, androidx.compose.animation.core.tween(350)) }
                                             offset.animateTo(past, androidx.compose.animation.core.tween(350, easing = androidx.compose.animation.core.FastOutLinearInEasing))
                                             kotlinx.coroutines.delay(500) // a moment of empty screen before the app opens
                                             onUnlock()
