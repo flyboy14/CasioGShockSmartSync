@@ -50,12 +50,16 @@ fun HealthScreen() {
                     onRefresh = { healthViewModel.onAction(HealthAction.PullRefresh) },
                     modifier = Modifier.weight(1f),
                 ) {
+                // Exactly one screen tall: the charts share whatever height is left. The outer
+                // scroll stays (with nothing to scroll) so the pull-to-refresh gesture still works.
+                androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val screenHeight = maxHeight
+                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .height(screenHeight)
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     // "Synced at …" (or "Syncing…" while a pull-to-refresh / fetch runs)
@@ -76,12 +80,13 @@ fun HealthScreen() {
 
                     // Steps card — shows Today, Hourly, and Daily panels all at once
                     StepCounterView(
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().weight(1f)
                     )
 
                     // Profile button removed: the DW-H5600 does not accept the exercise profile
                     // (0x2D rejected, 0x45 writes dropped; tested 2026-11-17).
-                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                }
                 }
                 }
             }

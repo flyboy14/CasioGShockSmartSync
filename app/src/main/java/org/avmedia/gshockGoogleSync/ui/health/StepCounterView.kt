@@ -55,6 +55,7 @@ fun StepCounterView(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .fillMaxSize()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
@@ -88,7 +89,7 @@ fun StepCounterView(
             // All 24 hours (midnight to now; later hours empty), scrollable, opened at the current hour.
             val hourlyKnown = state.stepCounterData.hourlySteps
             if (hourlyKnown.isEmpty()) {
-                EmptyHistory()
+                EmptyHistory(Modifier.weight(1f))
             } else {
                 val hourly: List<Int?> = (0 until 24).map { h -> hourlyKnown.getOrNull(h) }
                 val scroll = androidx.compose.foundation.rememberScrollState()
@@ -100,8 +101,9 @@ fun StepCounterView(
                     val step = with(density) { (HOURLY_BAR + HOURLY_GAP).toPx() }
                     scroll.scrollTo(((nowHour - 7) * step).toInt().coerceAtLeast(0))
                 }
-                Box(modifier = Modifier.fillMaxWidth().horizontalScroll(scroll)) {
+                Box(modifier = Modifier.fillMaxWidth().weight(1f).horizontalScroll(scroll)) {
                     StepsBarChart(
+                        modifier = Modifier.fillMaxSize(),
                         values = hourly,
                         labels = (0 until 24).map { hourLabel(it) },
                         barWidth = HOURLY_BAR,
@@ -120,15 +122,16 @@ fun StepCounterView(
             val dailyHistory = state.stepCounterData.dailyHistory.takeLast(6)
             val daily: List<Int?> = dailyHistory + (state.stepCounterData.currentDaySteps ?: 0)
             if (daily.isEmpty()) {
-                EmptyHistory()
+                EmptyHistory(Modifier.weight(1f))
             } else {
-                StepsBarChart(values = daily, labels = dailyLabels(daily.size))
+                StepsBarChart(modifier = Modifier.weight(1f), values = daily, labels = dailyLabels(daily.size))
             }
 
             if (state.monthly.isNotEmpty()) {
                 SectionGap()
                 SectionLabel(text = "Monthly")
                 StepsBarChart(
+                    modifier = Modifier.weight(1f),
                     values = state.monthly.map { it.second },
                     labels = state.monthly.map { (m, _) ->
                         m.month.getDisplayName(java.time.format.TextStyle.SHORT, Locale.getDefault())
@@ -245,7 +248,7 @@ private val HOURLY_GAP = 8.dp
 private fun StepsBarChart(
     values: List<Int?>,
     labels: List<String>,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier.height(CHART_HEIGHT), // callers pass weight(1f) to fill the screen
     barWidth: androidx.compose.ui.unit.Dp? = null,
     nullText: String = "–",
     compactNumbers: Boolean = false, // 12345 -> "12.3k"
@@ -257,7 +260,6 @@ private fun StepsBarChart(
 
     Canvas(
         modifier = sized
-            .height(CHART_HEIGHT)
             .padding(horizontal = 8.dp, vertical = 2.dp)
     ) {
         val spacing = 8.dp.toPx()
@@ -299,11 +301,10 @@ private fun StepsBarChart(
 }
 
 @Composable
-private fun EmptyHistory() {
+private fun EmptyHistory(modifier: Modifier = Modifier.height(CHART_HEIGHT)) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(CHART_HEIGHT),
+        modifier = modifier
+            .fillMaxWidth(),
         contentAlignment = Alignment.Center
     ) {
         Text("No history", color = MaterialTheme.colorScheme.onSurfaceVariant)
