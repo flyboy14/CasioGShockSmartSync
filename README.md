@@ -53,7 +53,7 @@ Hold an alarm and drag it to reorder the list; new alarms go to the top. Edits s
 </p>
 
 - **Watch face** — Face 1 (weekday) or Face 2 with its item: Sun, Steps, Moon, Heart rate, Sleep.
-- **Smart weather-step face** — Steps all day, the sun (or weather) screen in the evening; see below.
+- **Smart weather-step face** — Steps all day, the sun (or weather) screen before sunset; see below.
 - **Weather instead of sunrise** — the weather and temperature on the watch's sun screen; see below.
 - **Real today** — real sunrise and sunset, the current weather, and what the watch should be showing.
 - **Sound mode** — Sound + vibe, Sound only, Vibe only, Off, Custom.
@@ -86,7 +86,7 @@ The top line reads **`W:TT`**:
 Face 2 shows one item at a time. With this switch on (*Dynamic sunset-step toggle* in the app), the phone picks the item for you:
 
 - **Steps** for most of the day;
-- the **sun screen** from **four hours before sunset until ten minutes after** — with *Weather instead of sunrise* on, that is the weather and temperature on top and today's sunset below.
+- the **sun screen** from **four hours before sunset until ten minutes after** (the lead time is adjustable in 15-minute steps, from 15 minutes to 12 hours) — with *Weather instead of sunrise* on, that is the weather and temperature on top and today's sunset below.
 
 The app works out today's sunset from the phone's location and switches the face exactly at both edges with an exact Android alarm, so it also happens when the phone is asleep. While the switch is on, the manual item buttons are greyed out. During polar day or night (no sunset), the face stays on Steps.
 

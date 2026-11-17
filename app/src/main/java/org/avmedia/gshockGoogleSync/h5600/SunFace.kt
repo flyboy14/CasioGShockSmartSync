@@ -12,15 +12,36 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * "Dynamic sunset-step toggle": the watch face shows Steps, except from [LEAD_HOURS] before
- * sunset until [TRAIL_MIN] minutes after it, when it shows Sun data.
+ * "Dynamic sunset-step toggle": the watch face shows Steps, except from the lead time (default
+ * [DEFAULT_LEAD_MIN], set on the Custom tab) before sunset until [TRAIL_MIN] minutes after it,
+ * when it shows Sun data.
  */
 object SunFace {
-    const val LEAD_HOURS = 4L
+    const val DEFAULT_LEAD_MIN = 240
+    const val MIN_LEAD_MIN = 15
+    const val MAX_LEAD_MIN = 12 * 60
+    const val LEAD_STEP_MIN = 15
     const val TRAIL_MIN = 10L
 
     private const val PREFS = org.avmedia.gshockGoogleSync.h5600.H5600Prefs.NAME
     private const val KEY_ENABLED = "dyn_sun_face_enabled"
+    private const val KEY_LEAD = "dyn_sun_face_lead_min"
+
+    /** Minutes before sunset the Sun screen comes on. */
+    fun leadMin(context: Context) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(KEY_LEAD, DEFAULT_LEAD_MIN)
+            .coerceIn(MIN_LEAD_MIN, MAX_LEAD_MIN)
+
+    fun setLeadMin(context: Context, min: Int) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putInt(KEY_LEAD, min.coerceIn(MIN_LEAD_MIN, MAX_LEAD_MIN)).apply()
+
+    /** "4 h", "3 h 45 min", "45 min". Pure. */
+    fun formatLead(min: Int): String = when {
+        min < 60 -> "$min min"
+        min % 60 == 0 -> "${min / 60} h"
+        else -> "${min / 60} h ${min % 60} min"
+    }
 
     fun isEnabled(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ENABLED, false)
@@ -37,17 +58,17 @@ object SunFace {
         TempSun.riseSetUtcMin(date, lat, lon, h0 = -0.833)?.let { (_, set) -> TempSun.toLocal(date, set, zone) }
 
     /** Pure: which face the watch should show now. */
-    fun desiredFace(now: LocalDateTime, lat: Double, lon: Double, zone: ZoneId): WatchFaceItem {
+    fun desiredFace(now: LocalDateTime, lat: Double, lon: Double, zone: ZoneId, leadMin: Int = DEFAULT_LEAD_MIN): WatchFaceItem {
         val set = sunset(now.toLocalDate(), lat, lon, zone) ?: return WatchFaceItem.STEPS
-        return if (!now.isBefore(set.minusHours(LEAD_HOURS)) && now.isBefore(set.plusMinutes(TRAIL_MIN))) WatchFaceItem.SUNRISE_SUNSET
+        return if (!now.isBefore(set.minusMinutes(leadMin.toLong())) && now.isBefore(set.plusMinutes(TRAIL_MIN))) WatchFaceItem.SUNRISE_SUNSET
         else WatchFaceItem.STEPS
     }
 
     /** Next moment the face may change (today's or tomorrow's window start/end). */
-    fun nextSwitch(now: LocalDateTime, lat: Double, lon: Double, zone: ZoneId): LocalDateTime? =
+    fun nextSwitch(now: LocalDateTime, lat: Double, lon: Double, zone: ZoneId, leadMin: Int = DEFAULT_LEAD_MIN): LocalDateTime? =
         listOf(now.toLocalDate(), now.toLocalDate().plusDays(1))
             .mapNotNull { sunset(it, lat, lon, zone) }
-            .flatMap { listOf(it.minusHours(LEAD_HOURS), it.plusMinutes(TRAIL_MIN)) }
+            .flatMap { listOf(it.minusMinutes(leadMin.toLong()), it.plusMinutes(TRAIL_MIN)) }
             .filter { it.isAfter(now) }
             .minOrNull()
 }

@@ -208,10 +208,25 @@ private fun WatchFaceCard(vm: H5600ViewModel) {
                 AppSwitch(checked = s.dynamicFace, onCheckedChange = { vm.setDynamicFace(it) })
             }
             AppText(
-                text = "Steps all day; Sun data from ${SunFace.LEAD_HOURS} h before sunset until " +
+                text = "Steps all day; Sun data from ${SunFace.formatLead(s.faceLeadMin)} before sunset until " +
                     "${SunFace.TRAIL_MIN} min after. Today: ${s.sunsetText}",
                 fontSize = 13.sp,
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppText(text = "Sun data from: ${SunFace.formatLead(s.faceLeadMin)} before sunset", fontSize = 13.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(text = "−", onClick = {
+                        vm.adjustFaceLead(-SunFace.LEAD_STEP_MIN)
+                    })
+                    org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(text = "+", onClick = {
+                        vm.adjustFaceLead(SunFace.LEAD_STEP_MIN)
+                    })
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,

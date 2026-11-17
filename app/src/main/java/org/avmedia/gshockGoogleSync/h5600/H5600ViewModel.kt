@@ -43,6 +43,7 @@ class H5600ViewModel @Inject constructor(
         val riseCorr: Int = 0,
         val setCorr: Int = 0,
         val sunsetText: String = "",
+        val faceLeadMin: Int = SunFace.DEFAULT_LEAD_MIN,
         val lastApplied: String? = null,
     )
 
@@ -110,10 +111,11 @@ class H5600ViewModel @Inject constructor(
                     org.avmedia.gshockGoogleSync.utils.AppTimeFormat.format(java.time.LocalTime.ofInstant(java.time.Instant.ofEpochMilli(at), zone)))
             } ?: "no temperature yet",
             dynamicFace = SunFace.isEnabled(context),
+            faceLeadMin = SunFace.leadMin(context),
             sunsetText = set?.let { t ->
                 "sunset %s → Sun data %s–%s".format(
                     org.avmedia.gshockGoogleSync.utils.AppTimeFormat.format(t.toLocalTime()),
-                    org.avmedia.gshockGoogleSync.utils.AppTimeFormat.format(t.minusHours(SunFace.LEAD_HOURS).toLocalTime()),
+                    org.avmedia.gshockGoogleSync.utils.AppTimeFormat.format(t.minusMinutes(SunFace.leadMin(context).toLong()).toLocalTime()),
                     org.avmedia.gshockGoogleSync.utils.AppTimeFormat.format(t.plusMinutes(SunFace.TRAIL_MIN).toLocalTime()),
                 )
             } ?: "no location yet",
@@ -244,6 +246,27 @@ class H5600ViewModel @Inject constructor(
             }
         }
     }
+
+    /** Lead time before sunset; with the toggle on, the face is re-checked and the switch re-planned. */
+    fun adjustFaceLead(deltaMin: Int) {
+        SunFace.setLeadMin(context, SunFace.leadMin(context) + deltaMin)
+        reloadPrefs()
+        if (SunFace.isEnabled(context)) {
+            faceLeadJob?.cancel()
+            faceLeadJob = viewModelScope.launch {
+                kotlinx.coroutines.delay(800) // quick taps: one watch check after the last one
+                run("face lead time") {
+                    runner.applySunFace()
+                    reloadPrefs()
+                    readOrNull { api.getWatchFaceCode() }?.let { code ->
+                        _state.update { it.copy(watchFaceCode = code, watchFace = WatchFaceItem.fromCode(code)) }
+                    }
+                }
+            }
+        }
+    }
+
+    private var faceLeadJob: kotlinx.coroutines.Job? = null
 
     /**
      * The watch only recalculates sunrise/sunset when the time / cities are written, so a bare

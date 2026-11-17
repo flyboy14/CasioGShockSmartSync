@@ -298,6 +298,7 @@ class H5600ScheduleRunner @Inject constructor(
         val notes = mutableListOf<String>()
         applySunFaceLocked(notes)
         if (notes.isNotEmpty()) record(notes)
+        wake.trySend(Unit) // re-plan the next face switch (the switch or its lead time changed)
     }
 
     private fun record(notes: List<String>) {
@@ -380,7 +381,7 @@ class H5600ScheduleRunner @Inject constructor(
         if (!SunFace.isEnabled(context)) return
         watchCall("sun face", notes) {
             val loc = LocationProvider.getLocation(context) ?: error("no location")
-            val desired = SunFace.desiredFace(LocalDateTime.now(), loc.latitude, loc.longitude, ZoneId.systemDefault())
+            val desired = SunFace.desiredFace(LocalDateTime.now(), loc.latitude, loc.longitude, ZoneId.systemDefault(), SunFace.leadMin(context))
             val before = withTimeout(15_000) { api.setWatchFaceItem(desired) } // no write if already equal
             if (before != desired) notes += "face ${before ?: "?"} → $desired"
         }
@@ -422,7 +423,7 @@ class H5600ScheduleRunner @Inject constructor(
     private fun nextFaceSwitch(now: LocalDateTime): LocalDateTime? =
         if (!SunFace.isEnabled(context)) null
         else LocationProvider.getLocation(context)?.let {
-            SunFace.nextSwitch(now, it.latitude, it.longitude, ZoneId.systemDefault())
+            SunFace.nextSwitch(now, it.latitude, it.longitude, ZoneId.systemDefault(), SunFace.leadMin(context))
         }
 
     /**
