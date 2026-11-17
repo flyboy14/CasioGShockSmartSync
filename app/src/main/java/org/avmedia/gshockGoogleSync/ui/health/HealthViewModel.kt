@@ -129,6 +129,7 @@ class HealthViewModel @Inject constructor(
     private var stepFetchPending = false
 
     init {
+        showStoredSteps()
         refreshState()
         setupEventSubscription()
 
@@ -243,7 +244,18 @@ class HealthViewModel @Inject constructor(
         val result = api.getH5600LifeLog() ?: return StepCounterData.unavailable()
         return org.avmedia.gshockGoogleSync.h5600.H5600Steps
             .toStepCounterData(result, java.time.ZoneId.systemDefault())
-            .also { org.avmedia.gshockGoogleSync.h5600.H5600Steps.store(it) }
+            .also { org.avmedia.gshockGoogleSync.h5600.H5600Steps.store(it, context = appContext) }
+    }
+
+    /**
+     * DW-H5600: show today's last synced steps at once (kept on the phone), so the tab is not
+     * empty while the slow LifeLog sync (minutes) runs; the sync replaces them when it finishes.
+     */
+    private fun showStoredSteps() {
+        val stored = org.avmedia.gshockGoogleSync.h5600.H5600Steps.loadStored(appContext) ?: return
+        val syncedAt = org.avmedia.gshockGoogleSync.h5600.H5600Steps.syncedAtMillis()
+            ?.let { java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneId.systemDefault()) }
+        _state.update { it.copy(stepCounterData = stored, syncedAt = syncedAt).withStepMetrics(stored) }
     }
 
     private fun requestStepRefresh() {

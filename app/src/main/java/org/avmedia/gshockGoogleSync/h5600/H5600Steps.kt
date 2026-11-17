@@ -24,9 +24,49 @@ object H5600Steps {
         cache = null
     }
 
-    fun store(data: StepCounterData, now: Long = System.currentTimeMillis()) {
+    fun store(data: StepCounterData, now: Long = System.currentTimeMillis(), context: android.content.Context? = null) {
         cache = now to data
+        context?.let { persist(it, now, data) }
     }
+
+    // ---- Last sync kept on the phone: shown at once after a restart, while a new sync runs ----
+
+    private const val KEY_LAST = "h5600_last_steps"
+
+    private fun persist(context: android.content.Context, at: Long, d: StepCounterData) {
+        val o = org.json.JSONObject()
+            .put("at", at)
+            .put("ts", d.timestamp?.toString() ?: "")
+            .put("steps", d.currentDaySteps ?: -1)
+            .put("dow", d.dayOfWeek ?: -1).put("month", d.month ?: -1).put("dom", d.dayOfMonth ?: -1)
+            .put("hourly", org.json.JSONArray(d.hourlySteps.map { it ?: 0 }))
+        H5600Prefs.get(context).edit().putString(KEY_LAST, o.toString()).apply()
+    }
+
+    /**
+     * The last synced steps if they are from today (local date), else null. Also primes the
+     * in-memory cache with them, so "Synced at" shows the real sync time.
+     */
+    fun loadStored(context: android.content.Context, zone: ZoneId = ZoneId.systemDefault()): StepCounterData? =
+        runCatching {
+            val o = org.json.JSONObject(H5600Prefs.get(context).getString(KEY_LAST, null) ?: return null)
+            val at = o.getLong("at")
+            val ts = o.optString("ts").takeIf { it.isNotEmpty() }?.let(LocalDateTime::parse) ?: return null
+            if (ts.toLocalDate() != java.time.LocalDate.now(zone)) return null // yesterday's steps are not today's
+            val hourly = o.getJSONArray("hourly").let { a -> (0 until a.length()).map { a.getInt(it) } }
+            val data = StepCounterData(
+                timestamp = ts,
+                dayOfWeek = o.optInt("dow").takeIf { it >= 0 },
+                month = o.optInt("month").takeIf { it >= 0 },
+                dayOfMonth = o.optInt("dom").takeIf { it >= 0 },
+                hourlySteps = hourly,
+                dailyHistory = emptyList(),
+                currentDaySteps = o.optInt("steps").takeIf { it >= 0 },
+                hourlyByHour = hourly,
+            )
+            if (cache == null) cache = at to data
+            data
+        }.getOrNull()
 
     private fun toLocal(utc: LocalDateTime, zone: ZoneId): LocalDateTime =
         utc.atOffset(ZoneOffset.UTC).atZoneSameInstant(zone).toLocalDateTime()
