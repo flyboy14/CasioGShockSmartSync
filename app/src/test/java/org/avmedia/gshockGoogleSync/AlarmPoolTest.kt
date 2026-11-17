@@ -69,9 +69,51 @@ class AlarmPoolTest {
         assertEquals(watch[4], w[4]) // 5th slot untouched
     }
 
-    @Test fun soundFollowsNextAlarm() {
-        assertEquals(SoundMode.VIBE_ONLY, AlarmPool.desiredSoundMode(pool, at(15, 22, 0)))
-        assertEquals(SoundMode.CUSTOM, AlarmPool.desiredSoundMode(pool, at(16, 8, 51)))
+    // Sound mode: the user's base mode, except in an alarm's window (5 min before -> end of hold).
+    private val base = SoundMode.CUSTOM
+
+    @Test fun userModeOutsideAlarmWindows() {
+        assertEquals(SoundMode.CUSTOM, AlarmPool.desiredSoundMode(pool, at(15, 22, 0), base)) // evening before vibe alarm
+        assertEquals(SoundMode.CUSTOM, AlarmPool.desiredSoundMode(pool, at(16, 8, 4), base))  // 6 min before wake
+        assertEquals(SoundMode.ALL_ON, AlarmPool.desiredSoundMode(pool, at(16, 10, 0), SoundMode.ALL_ON))
+    }
+
+    @Test fun vibeAlarmBorrowsTheWatch() {
+        assertEquals(SoundMode.VIBE_ONLY, AlarmPool.desiredSoundMode(pool, at(16, 8, 5), base))  // 5 min before
+        assertEquals(SoundMode.VIBE_ONLY, AlarmPool.desiredSoundMode(pool, at(16, 8, 30), base)) // snooze window
+        assertEquals(SoundMode.CUSTOM, AlarmPool.desiredSoundMode(pool, at(16, 8, 51), base))    // snooze over
+    }
+
+    @Test fun soundAlarmNeedsSoundWhenUserIsOnVibe() {
+        assertEquals(SoundMode.CUSTOM, AlarmPool.desiredSoundMode(pool, at(16, 12, 28), SoundMode.VIBE_ONLY))
+        assertEquals(SoundMode.VIBE_ONLY, AlarmPool.desiredSoundMode(pool, at(16, 14, 0), SoundMode.VIBE_ONLY))
+        assertEquals(SoundMode.SOUND_ONLY, AlarmPool.desiredSoundMode(pool, at(16, 12, 28), SoundMode.SOUND_ONLY))
+    }
+
+    @Test fun stoppedSnoozeReturnsToUserMode() {
+        val stopped = AlarmPool.dismiss(pool, "wake", at(16, 8, 15))
+        assertEquals(SoundMode.CUSTOM, AlarmPool.desiredSoundMode(stopped, at(16, 8, 15), base))
+    }
+
+    // Do not disturb at night (23:00-08:20): Off at night, alarms still borrow the watch.
+    private val night = (23 * 60) to (8 * 60 + 20)
+
+    @Test fun nightIsSilentExceptAlarms() {
+        val b = { t: LocalDateTime -> AlarmPool.baseAt(base, night, t) }
+        assertEquals(SoundMode.ALL_OFF, b(at(15, 23, 30)))
+        assertEquals(SoundMode.ALL_OFF, b(at(16, 3, 0)))
+        assertEquals(SoundMode.CUSTOM, b(at(16, 8, 20)))
+        assertEquals(SoundMode.CUSTOM, b(at(15, 22, 59)))
+        assertEquals(SoundMode.VIBE_ONLY, AlarmPool.desiredSoundMode(pool, at(16, 8, 6), b(at(16, 8, 6))))  // wake alarm
+        assertEquals(SoundMode.ALL_OFF, AlarmPool.desiredSoundMode(pool, at(16, 8, 4), b(at(16, 8, 4))))    // before it
+        assertEquals(SoundMode.CUSTOM, AlarmPool.desiredSoundMode(listOf(cats1.copy(hour = 1)), at(16, 1, 27), b(at(16, 1, 27)))) // sound alarm at night (01:30)
+        assertEquals(at(15, 23, 0), AlarmPool.nextNightBoundary(night, at(15, 22, 0)))
+        assertEquals(at(16, 8, 20), AlarmPool.nextNightBoundary(night, at(16, 1, 0)))
+    }
+
+    @Test fun soundBoundariesAreWindowEdges() {
+        assertEquals(at(16, 8, 5), AlarmPool.nextSoundBoundary(listOf(wake), at(16, 7, 0)))
+        assertEquals(at(16, 8, 50), AlarmPool.nextSoundBoundary(listOf(wake), at(16, 8, 6)))
     }
 
     // Smart alarms: a smart 08:10 Mon-Fri (window 30) plus normal alarms.
@@ -93,7 +135,8 @@ class AlarmPoolTest {
     @Test fun soundModeSwitchesBeforeSmartWindow() {
         val vibeSmart = smartWake.copy(vibeOnly = true)
         // 07:45 is inside the 30-min window before 08:10 -> must already be vibe-only
-        assertEquals(SoundMode.VIBE_ONLY, AlarmPool.desiredSoundMode(listOf(vibeSmart, cats1), at(16, 7, 45)))
+        assertEquals(SoundMode.VIBE_ONLY, AlarmPool.desiredSoundMode(listOf(vibeSmart, cats1), at(16, 7, 35), base)) // 5 min before window
+        assertEquals(SoundMode.CUSTOM, AlarmPool.desiredSoundMode(listOf(vibeSmart, cats1), at(16, 7, 30), base))
     }
 
     // ---- one-time alarms ----
@@ -147,8 +190,8 @@ class AlarmPoolTest {
     @Test fun soundModeNotHeldAfterAlarmWithoutSnooze() {
         // wake (vibe only, 08:10) without snooze: at 08:12 the next alarm (cats1, sound) governs.
         val noSnooze = wake.copy(snooze = false)
-        assertEquals(SoundMode.CUSTOM, AlarmPool.desiredSoundMode(listOf(noSnooze, cats1), at(16, 8, 12)))
-        assertEquals(SoundMode.VIBE_ONLY, AlarmPool.desiredSoundMode(listOf(wake, cats1), at(16, 8, 12))) // with snooze: held
+        assertEquals(SoundMode.CUSTOM, AlarmPool.desiredSoundMode(listOf(noSnooze, cats1), at(16, 8, 12), base))
+        assertEquals(SoundMode.VIBE_ONLY, AlarmPool.desiredSoundMode(listOf(wake, cats1), at(16, 8, 12), base)) // with snooze: held
     }
 
     // ---- snooze window / stop snooze ----

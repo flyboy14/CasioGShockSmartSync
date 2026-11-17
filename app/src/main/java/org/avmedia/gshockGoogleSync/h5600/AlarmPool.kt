@@ -233,22 +233,58 @@ object AlarmPool {
         }
     }
 
-    /** Sound mode for the alarm that governs now: the most recent one within its [holdMin], else the next. */
-    fun desiredSoundMode(pool: List<PhoneAlarm>, now: LocalDateTime): SoundMode? {
-        if (pool.none { it.enabled && it.vibeOnly }) return null
-        val recent = pool.mapNotNull { a -> lastRing(a, now)?.takeIf { holdEnd(a, it).isAfter(now) }?.let { a to it } }
-            .maxByOrNull { it.second }
-        // A smart alarm can ring up to its window early: treat its window start as its ring time.
-        // Next = the alarm whose real ring is still ahead, ranked by when it may start ringing
-        // (a smart alarm can wake up to its window early, so inside the window it already governs).
-        val next = pool.mapNotNull { a ->
-            rings(a, now).firstOrNull { it.isAfter(now) }?.let { a to it.minusMinutes(a.smartWindowMin.toLong()) }
-        }.minByOrNull { it.second }
-        val governing = when {
-            recent == null -> next
-            next != null && next.second.isBefore(holdEnd(recent.first, recent.second)) -> next
-            else -> recent
-        } ?: return null
-        return if (governing.first.vibeOnly) SoundMode.VIBE_ONLY else SoundMode.CUSTOM
+    /** Minutes before an alarm (before a smart alarm's window) that its sound mode is set. */
+    const val PRE_ALARM_MIN = 5L
+
+    /**
+     * When an alarm "borrows" the watch's sound mode for one ring: from [PRE_ALARM_MIN] minutes
+     * before it can ring (before its smart window) until its hold ends (1 min, or the snooze window,
+     * or right away once the snooze is stopped from the phone).
+     */
+    fun soundWindow(a: PhoneAlarm, ring: LocalDateTime): Pair<LocalDateTime, LocalDateTime> =
+        ring.minusMinutes(a.smartWindowMin + PRE_ALARM_MIN) to holdEnd(a, ring)
+
+    /** The mode an alarm needs, given the user's own [base] mode. */
+    fun alarmMode(a: PhoneAlarm, base: SoundMode): SoundMode = when {
+        a.vibeOnly -> SoundMode.VIBE_ONLY
+        base == SoundMode.ALL_ON || base == SoundMode.SOUND_ONLY || base == SoundMode.CUSTOM -> base // already rings
+        else -> SoundMode.CUSTOM // base is vibe only / off: the alarm needs its sound
     }
+
+    /**
+     * The sound mode the watch should have now: the user's own [base] mode, except inside an
+     * alarm's [soundWindow] (the alarm whose window started last wins when windows overlap).
+     */
+    fun desiredSoundMode(pool: List<PhoneAlarm>, now: LocalDateTime, base: SoundMode): SoundMode =
+        pool.flatMap { a -> rings(a, now).map { a to soundWindow(a, it) } }
+            .filter { (_, w) -> !w.first.isAfter(now) && w.second.isAfter(now) }
+            .maxByOrNull { (_, w) -> w.first }
+            ?.let { (a, _) -> alarmMode(a, base) }
+            ?: base
+
+    /**
+     * The user's mode at [now]: [userBase], or ALL_OFF inside the night window [night] (minutes of
+     * the day, start to end, may cross midnight) when "Do not disturb during night time" is on.
+     * Alarms still borrow the watch inside the night (see [desiredSoundMode]).
+     */
+    fun baseAt(userBase: SoundMode, night: Pair<Int, Int>?, now: LocalDateTime): SoundMode {
+        if (night == null || night.first == night.second) return userBase
+        val m = now.hour * 60 + now.minute
+        val (start, end) = night
+        val inNight = if (start < end) m in start until end else m >= start || m < end
+        return if (inNight) SoundMode.ALL_OFF else userBase
+    }
+
+    /** Next start or end of the night window (scheduler wake-up); null when there is none. */
+    fun nextNightBoundary(night: Pair<Int, Int>?, now: LocalDateTime): LocalDateTime? =
+        night?.toList()?.map { min ->
+            val t = now.toLocalDate().atStartOfDay().plusMinutes(min.toLong())
+            if (t.isAfter(now)) t else t.plusDays(1)
+        }?.minOrNull()
+
+    /** Start and end of every alarm's [soundWindow] ahead of [now] (scheduler wake-ups). */
+    fun nextSoundBoundary(pool: List<PhoneAlarm>, now: LocalDateTime): LocalDateTime? =
+        pool.flatMap { a -> rings(a, now).flatMap { soundWindow(a, it).toList() } }
+            .filter { it.isAfter(now) }
+            .minOrNull()
 }

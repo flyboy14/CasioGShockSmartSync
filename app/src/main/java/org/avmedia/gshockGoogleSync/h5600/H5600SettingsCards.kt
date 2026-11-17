@@ -315,7 +315,9 @@ private fun NightTimeCard(vm: H5600ViewModel) {
     var picking by remember { mutableStateOf<Boolean?>(null) } // true = start, false = end
     SettingsCard("Night time", "Your usual sleep time. The watch uses it for sleep tracking and night-time " +
         "heart rate, and to keep notifications quiet at night. It is stored twice on the watch (basic settings " +
-        "and sleep settings); saving here sets both.") {
+        "and sleep settings); saving here sets both.<br><br>Do not disturb during night time: the watch's sound " +
+        "mode is Off (no sound, no vibration) from the start to the end of the night. Alarms still ring: each " +
+        "one switches the mode it needs a few minutes before and the watch goes silent again after it.") {
         val b = s.basic
         if (b == null) { LoadingSpinner(); return@SettingsCard }
         val fmt = { h: Int, m: Int -> AppTimeFormat.format(java.time.LocalTime.of(h, m)) }
@@ -323,6 +325,7 @@ private fun NightTimeCard(vm: H5600ViewModel) {
             AppSmallButton(text = "From ${fmt(b.nightStartHour, b.nightStartMin)}", onClick = { picking = true })
             AppSmallButton(text = "to ${fmt(b.nightEndHour, b.nightEndMin)}", onClick = { picking = false })
         }
+        SwitchRow("Do not disturb during night time", s.nightDnd) { vm.setNightDnd(it) }
         s.physical?.let { p ->
             if (p.sleepStartHour != b.nightStartHour || p.sleepStartMin != b.nightStartMin ||
                 p.wakeHour != b.nightEndHour || p.wakeMin != b.nightEndMin

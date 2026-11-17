@@ -390,10 +390,12 @@ class H5600ScheduleRunner @Inject constructor(
                     AlarmPool.saveLoadedSmartId(context, smartId)
                 }
 
-                AlarmPool.desiredSoundMode(pool, now)?.let { desired ->
-                    val before = api.setSoundMode(desired) // one read; no write if already equal
-                    if (before != desired) notes += "sound ${before ?: "?"} → $desired"
-                }
+                // The user's own mode, except while an alarm borrows the watch (a few minutes before it
+                // until it and its snooze are over); then back to the user's mode.
+                val base = AlarmPool.baseAt(H5600Prefs.baseSoundMode(context), H5600Prefs.nightDnd(context), now)
+                val desired = AlarmPool.desiredSoundMode(pool, now, base)
+                val before = api.setSoundMode(desired) // one read; no write if already equal
+                if (before != desired) notes += "sound ${before ?: "?"} → $desired"
             }
         }
         showSnoozing(AlarmPool.snoozing(pool, now).map { it.first })
@@ -442,15 +444,17 @@ class H5600ScheduleRunner @Inject constructor(
     }
 
     /** Next alarm-related boundary: 1 and HOLD minutes after every alarm, and before smart windows. */
-    private fun nextAlarmBoundary(now: LocalDateTime): LocalDateTime? =
-        AlarmPool.load(context)?.filter { it.enabled }.orEmpty()
-            .flatMap { a ->
-                listOf(a.minuteOfDay + 1, a.minuteOfDay + AlarmPool.holdMin(a).toInt()) +
-                    // smart alarm: also switch the sound mode just before its window opens
-                    (if (a.isSmart) listOf(a.minuteOfDay - a.smartWindowMin - 1) else emptyList())
-            }
+    private fun nextAlarmBoundary(now: LocalDateTime): LocalDateTime? {
+        val pool = AlarmPool.load(context)?.filter { it.enabled }.orEmpty()
+        // slot reloads: 1 and HOLD minutes after every alarm
+        val slots = pool.flatMap { a -> listOf(a.minuteOfDay + 1, a.minuteOfDay + AlarmPool.holdMin(a).toInt()) }
             .map { nextOccurrence(it, now) }
-            .minOrNull()
+        // sound mode: start and end of each alarm's sound window
+        return (slots + listOfNotNull(
+            AlarmPool.nextSoundBoundary(pool, now),
+            AlarmPool.nextNightBoundary(H5600Prefs.nightDnd(context), now), // do not disturb: night edges
+        )).minOrNull()
+    }
 
     private fun nextFaceSwitch(now: LocalDateTime): LocalDateTime? =
         if (!SunFace.isEnabled(context)) null

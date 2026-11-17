@@ -52,6 +52,7 @@ class H5600ViewModel @Inject constructor(
         val physical: org.avmedia.gshockapi.model.H5600Physical? = null,
         val stepGoal: org.avmedia.gshockapi.model.StepGoal? = null,
         val modeList: List<Int>? = null, // 0x52, button order; left-out modes are hidden
+        val nightDnd: Boolean = false, // do not disturb during night time (phone-side, via the sound mode)
         val knownModes: List<Int> = emptyList(), // every mode this watch has shown (to bring hidden ones back)
     ) {
         val hrMonitor: HeartRateMonitor? get() = hrMonitorCode?.let(HeartRateMonitor::fromCode)
@@ -122,6 +123,7 @@ class H5600ViewModel @Inject constructor(
                     org.avmedia.gshockGoogleSync.utils.AppTimeFormat.format(java.time.LocalTime.ofInstant(java.time.Instant.ofEpochMilli(at), zone)))
             } ?: "no temperature yet",
             dynamicFace = SunFace.isEnabled(context),
+            nightDnd = H5600Prefs.nightDndEnabled(context),
             faceLeadMin = SunFace.leadMin(context),
             sunsetText = set?.let { t ->
                 "sunset %s → Sun data %s–%s".format(
@@ -186,7 +188,9 @@ class H5600ViewModel @Inject constructor(
         return last ?: expected
     }
 
+    /** The user's choice: becomes the base mode the scheduler returns to after every alarm. */
     fun setSoundMode(mode: SoundMode) {
+        H5600Prefs.setBaseSoundMode(context, mode)
         val previous = _state.value.soundMode
         _state.update { it.copy(soundMode = mode) } // move the UI immediately
         run("set sound mode", onError = { _state.update { it.copy(soundMode = previous) } }) {
@@ -228,6 +232,7 @@ class H5600ViewModel @Inject constructor(
             val goal = readOrNull { api.getH5600StepGoal() }
             val hr = readOrNull { api.getH5600HeartRateMonitorCode() }
             val modes = readOrNull { api.getH5600ModeList() }
+            basic?.let { H5600Prefs.saveNightTime(context, it.nightStartHour * 60 + it.nightStartMin, it.nightEndHour * 60 + it.nightEndMin) }
             val known = modes?.let { rememberModes(it) } ?: knownModes()
             _state.update {
                 it.copy(
@@ -296,7 +301,16 @@ class H5600ViewModel @Inject constructor(
         run("night time", onError = { refreshSettings() }) {
             api.setH5600Basic(nb)
             if (np != null) api.setH5600Physical(np)
+            H5600Prefs.saveNightTime(context, startH * 60 + startM, endH * 60 + endM)
+            if (H5600Prefs.nightDndEnabled(context)) runner.applyAlarms() // re-plan the night silence
         }
+    }
+
+    /** Do not disturb during night time: the sound mode goes to Off for the night, alarms excepted. */
+    fun setNightDnd(on: Boolean) {
+        H5600Prefs.setNightDndEnabled(context, on)
+        _state.update { it.copy(nightDnd = on) }
+        run("do not disturb") { runner.applyAlarms() }
     }
 
     fun setStepGoal(g: org.avmedia.gshockapi.model.StepGoal) {
