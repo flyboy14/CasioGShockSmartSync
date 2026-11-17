@@ -38,6 +38,8 @@ fun H5600Card(vm: H5600ViewModel = hiltViewModel()) {
     Column {
         WatchFaceCard(vm)
         androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 8.dp))
+        SunWeatherCard(vm)
+        androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 8.dp))
         SoundNotificationsCard(vm)
         androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 8.dp))
         FindPhoneCard()
@@ -196,22 +198,7 @@ private fun WatchFaceCard(vm: H5600ViewModel) {
         Column(modifier = Modifier.padding(12.dp)) {
             CardTitle("Watch face", "Face 1 shows the weekday; Face 2 shows the item chosen below.<br><br>" +
                 "Auto: Steps all day, Sun data from the set time before sunset until ${SunFace.TRAIL_MIN} min after " +
-                "(− / + change the lead time). The phone switches the face exactly at both edges.<br><br>" +
-                "Weather instead of sunrise: the sun screen's top line shows W:TT, W = 1 sunny, 2 cloudy, " +
-                "3 rain/snow, 4 extreme (heavy rain, storm, gusts ≥ 60 km/h); TT = °C (0–59). E.g. 1:18 = sunny " +
-                "18 °C. Sunset stays real. Updates every ${TempSun.REFRESH_MIN} min while connected.<br><br>" +
-                "Fine-tune: if the top line is 1 min too low, press + on top; if sunset is 1 min late, press − on sunset.")
-            // Real values to compare with the watch (phone location, Open-Meteo)
-            AppText(text = "Real today: ${s.realSun}", fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
-            AppText(text = "Weather now: ${s.realWeather}", fontSize = 13.sp)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AppText(text = "Watch should show: ${s.watchShould}", fontSize = 13.sp, modifier = Modifier.weight(1f))
-                org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(text = "Refresh weather", onClick = { vm.refreshWeatherOnly() })
-            }
+                "(− / + change the lead time). The phone switches the face exactly at both edges.")
             // Watch face item
             // Face 1 = simple face with the weekday; face 2 = customisable face showing the item below.
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
@@ -264,15 +251,41 @@ private fun WatchFaceCard(vm: H5600ViewModel) {
                     })
                 }
             }
+        }
+    }
+}
+
+/** Sun & weather: the weather-on-the-sun-screen switch with the real values to compare against. */
+@Composable
+private fun SunWeatherCard(vm: H5600ViewModel) {
+    val s by vm.state.collectAsState()
+    AppCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            CardTitle("Sun & weather", "Weather instead of sunrise: the sun screen's top line shows W:TT, " +
+                "W = 1 sunny, 2 cloudy, 3 rain/snow, 4 extreme (heavy rain, storm, gusts ≥ 60 km/h); TT = °C (0–59). " +
+                "E.g. 1:18 = sunny 18 °C. Sunset stays real. Updates every ${TempSun.REFRESH_MIN} min while connected.<br><br>" +
+                "Real today and Weather now are the real values for the phone's location (Open-Meteo); " +
+                "Watch should show is what the watch's sun screen should read now.<br><br>" +
+                "Fine-tune: if the top line is 1 min too low, press + on top; if sunset is 1 min late, press − on sunset.")
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 AppText(text = "Weather instead of sunrise")
                 AppSwitch(checked = s.tempSun, onCheckedChange = { vm.setTempSun(it) })
             }
-            if (s.tempSun) AppText(text = s.tempText.replaceFirstChar { it.uppercase() }, fontSize = 13.sp)
+            // Real values to compare with the watch (phone location, Open-Meteo)
+            AppText(text = "Real today: ${s.realSun}", fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppText(text = "Weather now: ${s.realWeather}", fontSize = 13.sp, modifier = Modifier.weight(1f))
+                org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(text = "Refresh", onClick = { vm.refreshWeatherOnly() })
+            }
+            AppText(text = "Watch should show: ${s.watchShould}", fontSize = 13.sp)
             if (s.tempSun) {
                 // Fine-tune for the watch's own sun formula (measured: top +2, sunset -3)
                 listOf(
