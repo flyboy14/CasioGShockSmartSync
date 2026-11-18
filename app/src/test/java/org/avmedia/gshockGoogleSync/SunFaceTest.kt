@@ -43,6 +43,28 @@ class SunFaceTest {
     @Test fun stepsAfterSunset() = assertEquals(
         WatchFaceItem.STEPS, SunFace.desiredFace(LocalDateTime.of(2026, 11, 16, 17, 40), 38.7223, -9.1393, lisbon))
 
+    // "Sun at home": on the home Wi-Fi the Auto face shows Sun all day.
+    @Test fun sunAllDayAtHome() {
+        assertEquals(WatchFaceItem.SUNRISE_SUNSET,
+            SunFace.desiredFace(LocalDateTime.of(2026, 11, 16, 10, 0), 38.7223, -9.1393, lisbon, atHome = true))
+        assertEquals(WatchFaceItem.SUNRISE_SUNSET,
+            SunFace.desiredFace(LocalDateTime.of(2026, 11, 16, 22, 0), 38.7223, -9.1393, lisbon, atHome = true))
+    }
+
+    @Test fun homeNeedsTheSavedNetwork() {
+        assertTrue(org.avmedia.gshockGoogleSync.h5600.HomeWifi.atHome(true, listOf("Home", "Home-5G"), "Home-5G"))
+        assertEquals(false, org.avmedia.gshockGoogleSync.h5600.HomeWifi.atHome(true, listOf("Home"), "Cafe"))
+        assertEquals(false, org.avmedia.gshockGoogleSync.h5600.HomeWifi.atHome(true, listOf("Home"), null))
+        assertEquals(false, org.avmedia.gshockGoogleSync.h5600.HomeWifi.atHome(false, listOf("Home"), "Home"))
+        assertEquals(false, org.avmedia.gshockGoogleSync.h5600.HomeWifi.atHome(true, emptyList(), "Home"))
+    }
+
+    @Test fun wifiNameCleaned() {
+        assertEquals("My Wifi", org.avmedia.gshockGoogleSync.h5600.HomeWifi.clean("\"My Wifi\""))
+        assertEquals(null, org.avmedia.gshockGoogleSync.h5600.HomeWifi.clean("<unknown ssid>"))
+        assertEquals(null, org.avmedia.gshockGoogleSync.h5600.HomeWifi.clean(null))
+    }
+
     @Test fun nextSwitchIsWindowStart() =
         near(LocalDateTime.of(2026, 11, 16, 13, 20), SunFace.nextSwitch(LocalDateTime.of(2026, 11, 16, 9, 0), 38.7223, -9.1393, lisbon))
 }

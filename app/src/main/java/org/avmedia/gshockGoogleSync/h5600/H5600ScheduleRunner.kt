@@ -121,7 +121,11 @@ class H5600ScheduleRunner @Inject constructor(
     /** Stop snooze from a screen or the notification, in the background. */
     fun requestStopSnooze(id: String) = background("stop snooze") { stopSnooze(id) }
 
+    /** (Re)starts following the Wi-Fi for "Sun at home"; also called after the permission is granted. */
+    fun startHomeWifi() = HomeWifi.start(context) { background("home wi-fi") { applySunFace() } }
+
     init {
+        startHomeWifi()
         // Debug builds: protocol probing over adb, e.g.
         //   adb shell am broadcast -a org.avmedia.gshockGoogleSync.RAW --es get 52
         //   adb shell am broadcast -a org.avmedia.gshockGoogleSync.RAW --es set "13 04 01 ..."
@@ -422,7 +426,8 @@ class H5600ScheduleRunner @Inject constructor(
         if (!SunFace.isEnabled(context)) return
         watchCall("sun face", notes) {
             val loc = LocationProvider.getLocation(context) ?: error("no location")
-            val desired = SunFace.desiredFace(LocalDateTime.now(), loc.latitude, loc.longitude, ZoneId.systemDefault(), SunFace.leadMin(context))
+            val home = HomeWifi.atHome(context)
+            val desired = SunFace.desiredFace(LocalDateTime.now(), loc.latitude, loc.longitude, ZoneId.systemDefault(), SunFace.leadMin(context), home)
             val before = withTimeout(15_000) { api.setWatchFaceItem(desired) } // no write if already equal
             if (before != desired) notes += "face ${before ?: "?"} → $desired"
         }

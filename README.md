@@ -53,7 +53,8 @@ Hold an alarm and drag it to reorder the list; new alarms go to the top. Edits s
 </p>
 
 - **Watch face** — Face 1 (weekday) or Face 2 with its item: **Auto** (steps by day, the sun screen before sunset; see below), Sun, Steps, Moon, Heart rate, Sleep. Picking Heart rate offers to switch heart-rate monitoring to *All day* (the item shows nothing without it); leaving it offers to switch back.
-- **Sun & weather** — *Weather instead of sunrise* (see below), today's real sunrise and sunset, the current weather and what the watch should be showing. The refresh icon fetches the weather and sends it to the watch at once.
+- **Sun & weather** (shown with the Sun or Auto item) — *Sun at home* and *Weather instead of sunrise* (both below). One line shows what the watch should be showing; tap it for today's real sunrise and sunset, the current weather (the refresh icon fetches it and sends it to the watch at once) and the fine-tune buttons.
+- **Sun at home** (Auto only) — while the phone is on one of your home Wi-Fi networks, Auto shows the sun screen all day: no point counting steps from room to room. Add any number of networks (2.4 GHz, 5 GHz, an extender) from a list of the networks in range; away from them, Auto works as below. It switches the moment the Wi-Fi connects or drops. Android reveals Wi-Fi names only with precise location allowed *all the time*, so the app asks for that.
 - **Sound mode** — Sound + vibe, Sound only, Vibe only, Off, Custom. This is *your* mode: alarms borrow the watch briefly and give it back.
 - **Silent at night** — no sound and no vibration from the start to the end of your night time; alarms still ring.
 - **Notifications only from chosen apps** — a per-app allowlist for what reaches the watch.

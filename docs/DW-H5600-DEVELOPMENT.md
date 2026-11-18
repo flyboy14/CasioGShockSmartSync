@@ -181,6 +181,9 @@ for alarms, the face in Auto, the sun data / weather. The rule for all of them:
   the phone stops it (`AlarmPool.dismiss`, `SnoozeNotifier`).
 - A user change that affects the timetable (alarm edit, night time, DND switch) calls
   `runner.applyAlarms()` so the watch is updated at once and the next wake-up is re-planned.
+- Inputs that are not time (the Wi-Fi network for *Sun at home*) are followed with Android callbacks
+  that call the same pass (`HomeWifi.start` → `runner.applySunFace()`), and enter the pure function
+  as one more parameter (`SunFace.desiredFace(…, atHome)`).
 
 ### 4.6 Finishing
 

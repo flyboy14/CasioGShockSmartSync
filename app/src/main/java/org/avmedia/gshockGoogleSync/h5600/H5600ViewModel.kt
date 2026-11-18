@@ -55,6 +55,12 @@ class H5600ViewModel @Inject constructor(
         val stepGoal: org.avmedia.gshockapi.model.StepGoal? = null,
         val modeList: List<Int>? = null, // 0x52, button order; left-out modes are hidden
         val nightDnd: Boolean = false, // do not disturb during night time (phone-side, via the sound mode)
+        // "Sun at home" (Auto face): home Wi-Fi name, the Wi-Fi now, and whether the permission is there
+        val homeSun: Boolean = false,
+        val homeSsids: List<String> = emptyList(),
+        val nearbyWifi: List<String> = emptyList(), // for the "Add" dropdown
+        val currentSsid: String? = null,
+        val homePermission: Boolean = false,
         val nightTimeText: String? = null, // the watch's night time as last read, e.g. "11:00 PM – 8:20 AM"
         val knownModes: List<Int> = emptyList(), // every mode this watch has shown (to bring hidden ones back)
     ) {
@@ -101,6 +107,7 @@ class H5600ViewModel @Inject constructor(
             state.map { listOf(it.basic, it.physical, it.stepGoal, it.modeList, it.hrMonitorCode) }
                 .distinctUntilChanged().drop(1).collect { saveSettingsCache() }
         }
+        viewModelScope.launch { HomeWifi.currentSsid.collect { w -> _state.update { it.copy(currentSsid = w) } } }
         // The scheduler switches the sound mode around alarms and the night: show what it set.
         viewModelScope.launch {
             runner.soundModeSet.collect { m -> if (m != null) _state.update { it.copy(soundMode = m) } }
@@ -151,6 +158,9 @@ class H5600ViewModel @Inject constructor(
             } ?: "no temperature yet",
             dynamicFace = SunFace.isEnabled(context),
             nightDnd = H5600Prefs.nightDndEnabled(context),
+            homeSun = HomeWifi.isEnabled(context),
+            homeSsids = HomeWifi.homeSsids(context),
+            homePermission = HomeWifi.hasPermission(context),
             nightTimeText = H5600Prefs.nightTime(context)?.let { (a, b) ->
                 val f = { m: Int -> org.avmedia.gshockGoogleSync.utils.AppTimeFormat.format(java.time.LocalTime.of(m / 60, m % 60)) }
                 "${f(a)} – ${f(b)}"
@@ -497,6 +507,35 @@ class H5600ViewModel @Inject constructor(
                 org.avmedia.gshockGoogleSync.utils.LastKnown.put(context, "watch_face", code)
             }
         }
+    }
+
+    /** "Sun at home" on/off; switching it on saves the current Wi-Fi as home if none is saved yet. */
+    fun setHomeSun(on: Boolean) {
+        HomeWifi.setEnabled(context, on)
+        if (on && HomeWifi.homeSsids(context).isEmpty()) HomeWifi.currentSsid.value?.let { HomeWifi.addHomeSsid(context, it) }
+        reloadPrefs()
+        run("sun at home") { runner.applySunFace() }
+    }
+
+    /** Networks for the "Add" dropdown (what the phone sees now). */
+    fun loadNearbyWifi() = _state.update { it.copy(nearbyWifi = HomeWifi.nearby(context)) }
+
+    fun addHomeWifi(ssid: String) {
+        HomeWifi.addHomeSsid(context, ssid)
+        reloadPrefs()
+        run("sun at home") { runner.applySunFace() }
+    }
+
+    fun removeHomeWifi(ssid: String) {
+        HomeWifi.removeHomeSsid(context, ssid)
+        reloadPrefs()
+        run("sun at home") { runner.applySunFace() }
+    }
+
+    /** After the location permission dialogs: re-register the Wi-Fi callback so the name becomes visible. */
+    fun onHomePermissionResult() {
+        runner.startHomeWifi()
+        reloadPrefs()
     }
 
     /** Lead time before sunset; with the toggle on, the face is re-checked and the switch re-planned. */

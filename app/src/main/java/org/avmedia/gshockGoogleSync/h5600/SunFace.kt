@@ -57,8 +57,9 @@ object SunFace {
         // Same formula as the weather trick (one copy), with the standard -0.833° horizon.
         TempSun.riseSetUtcMin(date, lat, lon, h0 = -0.833)?.let { (_, set) -> TempSun.toLocal(date, set, zone) }
 
-    /** Pure: which face the watch should show now. */
-    fun desiredFace(now: LocalDateTime, lat: Double, lon: Double, zone: ZoneId, leadMin: Int = DEFAULT_LEAD_MIN): WatchFaceItem {
+    /** Pure: which face the watch should show now. [atHome]: Sun all day ("Sun at home", HomeWifi). */
+    fun desiredFace(now: LocalDateTime, lat: Double, lon: Double, zone: ZoneId, leadMin: Int = DEFAULT_LEAD_MIN, atHome: Boolean = false): WatchFaceItem {
+        if (atHome) return WatchFaceItem.SUNRISE_SUNSET
         val set = sunset(now.toLocalDate(), lat, lon, zone) ?: return WatchFaceItem.STEPS
         return if (!now.isBefore(set.minusMinutes(leadMin.toLong())) && now.isBefore(set.plusMinutes(TRAIL_MIN))) WatchFaceItem.SUNRISE_SUNSET
         else WatchFaceItem.STEPS

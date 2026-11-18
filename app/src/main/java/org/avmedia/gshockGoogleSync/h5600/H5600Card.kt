@@ -18,6 +18,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -39,8 +43,11 @@ fun H5600Card(vm: H5600ViewModel = hiltViewModel()) {
     Column {
         WatchFaceCard(vm)
         androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 8.dp))
-        SunWeatherCard(vm)
-        androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 8.dp))
+        // Only with a sun face: the face-2 item Sun, or Auto (steps / sun).
+        if (s.dynamicFace || s.watchFace == WatchFaceItem.SUNRISE_SUNSET) {
+            SunWeatherCard(vm)
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 8.dp))
+        }
         SoundNotificationsCard(vm)
         androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 8.dp))
         FindPhoneCard()
@@ -267,15 +274,39 @@ private fun SunWeatherCard(vm: H5600ViewModel) {
                 "Watch should show is what the watch's sun screen should read now.<br><br>" +
                 "Refresh fetches the weather now and sends location and time to the watch (the app also does " +
                 "this every ${TempSun.REFRESH_MIN} min and on every connection).<br><br>" +
-                "Fine-tune: if the top line is 1 min too low, press + on top; if sunset is 1 min late, press − on sunset.")
+                "Fine-tune: if the top line is 1 min too low, press + on top; if sunset is 1 min late, press − on sunset.<br><br>" +
+                "Sun at home (Auto face only): while the phone is on one of your home Wi-Fi networks, Auto shows Sun data " +
+                "all day; away from them, the steps / sunset logic applies. It switches the moment the Wi-Fi connects or " +
+                "drops. Android shows the Wi-Fi name only with precise location allowed all the time.")
+            // Sun at home: only for Auto (a fixed Sun face has nothing to switch).
+            if (s.dynamicFace) HomeSunRow(vm)
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(top = if (s.dynamicFace) 8.dp else 0.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 AppText(text = "Weather instead of sunrise")
                 AppSwitch(checked = s.tempSun, onCheckedChange = { vm.setTempSun(it) })
             }
+            // Details (real values, refresh, fine-tune) collapse behind one summary line.
+            var details by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp).clickable { details = !details },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppText(
+                    text = "Watch should show: " + s.watchShould.substringBefore(" (last").ifEmpty { "…" },
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                androidx.compose.material3.Icon(
+                    if (details) androidx.compose.material.icons.Icons.Filled.KeyboardArrowUp
+                    else androidx.compose.material.icons.Icons.Filled.KeyboardArrowDown,
+                    contentDescription = if (details) "Hide details" else "Show details",
+                )
+            }
+            if (!details) return@Column
             // Real values to compare with the watch (phone location, Open-Meteo)
             AppText(text = s.realSun.replaceFirstChar { it.uppercase() }, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
             Row(
@@ -291,7 +322,9 @@ private fun SunWeatherCard(vm: H5600ViewModel) {
                     )
                 }
             }
-            AppText(text = "Watch should show: ${s.watchShould}", fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+            s.watchShould.substringAfter(" (", "").takeIf { it.isNotEmpty() }?.let { last ->
+                AppText(text = last.removeSuffix(")").replaceFirstChar { it.uppercase() }, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+            }
             if (s.tempSun) {
                 // Fine-tune for the watch's own sun formula (measured: top +2, sunset -3)
                 listOf(
@@ -465,6 +498,110 @@ internal fun HeartRateMonitorCard(vm: H5600ViewModel) {
             }
             if (s.hrMonitorCode != null && s.hrMonitor == null)
                 AppText(text = "Unknown mode (code 0x%02X)".format(s.hrMonitorCode), fontSize = 13.sp)
+        }
+    }
+}
+
+/**
+ * "Sun at home" (Auto face): switch, home Wi-Fi name and where the phone is now. Switching it on
+ * asks for precise location, then "Allow all the time" (Android hides the Wi-Fi name otherwise).
+ */
+@Composable
+private fun HomeSunRow(vm: H5600ViewModel) {
+    val s by vm.state.collectAsState()
+    val background = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { vm.onHomePermissionResult() }
+    val precise = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions(),
+    ) { granted ->
+        if (granted[android.Manifest.permission.ACCESS_FINE_LOCATION] == true &&
+            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q
+        ) background.launch(android.Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        else vm.onHomePermissionResult()
+    }
+    val askPermission = {
+        precise.launch(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION))
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AppText(text = "Sun at home", modifier = Modifier.weight(1f))
+        AppSwitch(checked = s.homeSun, onCheckedChange = { on ->
+            vm.setHomeSun(on)
+            if (on && !s.homePermission) askPermission()
+        })
+    }
+    if (!s.homeSun) return
+    if (!s.homePermission) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AppText(text = "Needs location \"Allow all the time\"", fontSize = 13.sp, modifier = Modifier.weight(1f))
+            org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(text = "Allow", onClick = askPermission)
+        }
+        return
+    }
+    val here = s.currentSsid
+    // Summary line; tap it to open or close the list of home networks.
+    var expanded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AppText(
+            text = when {
+                s.homeSsids.isEmpty() -> "No home Wi-Fi yet"
+                here != null && here in s.homeSsids -> "You are home ($here)"
+                else -> "Away" + (here?.let { " ($it)" } ?: "")
+            } + " · " + s.homeSsids.size + (if (s.homeSsids.size == 1) " home network" else " home networks"),
+            fontSize = 13.sp,
+            modifier = Modifier.weight(1f),
+        )
+        androidx.compose.material3.Icon(
+            if (expanded) androidx.compose.material.icons.Icons.Filled.KeyboardArrowUp
+            else androidx.compose.material.icons.Icons.Filled.KeyboardArrowDown,
+            contentDescription = if (expanded) "Hide home networks" else "Show home networks",
+        )
+    }
+    if (!expanded) return
+    // Home networks (any of them counts as home), each removable.
+    s.homeSsids.forEach { ssid ->
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AppText(text = ssid, modifier = Modifier.weight(1f))
+            androidx.compose.material3.IconButton(onClick = { vm.removeHomeWifi(ssid) }) {
+                androidx.compose.material3.Icon(
+                    androidx.compose.material.icons.Icons.Filled.Close, contentDescription = "Remove $ssid",
+                )
+            }
+        }
+    }
+    // Add: a dropdown of the networks the phone can see now (current first).
+    var open by remember { mutableStateOf(false) }
+    androidx.compose.foundation.layout.Box {
+        org.avmedia.gshockGoogleSync.ui.common.AppSmallButton(text = "Add home Wi-Fi", onClick = {
+            vm.loadNearbyWifi(); open = true
+        })
+        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            val choices = s.nearbyWifi.filter { it !in s.homeSsids }
+            if (choices.isEmpty()) androidx.compose.material3.DropdownMenuItem(
+                text = { AppText(text = "No other networks in range", fontSize = 13.sp) }, onClick = { open = false }, enabled = false,
+            )
+            choices.forEach { ssid ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { AppText(text = ssid + if (ssid == here) "  (connected)" else "") },
+                    onClick = { open = false; vm.addHomeWifi(ssid) },
+                )
+            }
         }
     }
 }
