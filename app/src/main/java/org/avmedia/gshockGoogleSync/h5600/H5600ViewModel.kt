@@ -7,7 +7,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
@@ -87,10 +89,18 @@ class H5600ViewModel @Inject constructor(
         run(what, onError) { try { block() } finally { writing -= key } }
     }
 
-    private fun <T> fresh(key: String, read: T?, shown: T?): T? = if (key in writing) shown else read ?: shown
+    private fun <T> fresh(key: String, read: T?, shown: T?): T? =
+        if (key in writing || pendingWrites[key]?.isActive == true) shown else read ?: shown
     private val running = java.util.concurrent.atomic.AtomicInteger(0)
 
     init {
+        // Sport / Settings values from the phone first (spinners only before the very first read),
+        // saved again whenever one changes (a read or the user's edit).
+        _state.update(loadSettingsCache())
+        viewModelScope.launch {
+            state.map { listOf(it.basic, it.physical, it.stepGoal, it.modeList, it.hrMonitorCode) }
+                .distinctUntilChanged().drop(1).collect { saveSettingsCache() }
+        }
         // The scheduler switches the sound mode around alarms and the night: show what it set.
         viewModelScope.launch {
             runner.soundModeSet.collect { m -> if (m != null) _state.update { it.copy(soundMode = m) } }
@@ -246,25 +256,71 @@ class H5600ViewModel @Inject constructor(
     }
 
     /** Reads the values shown on the Settings tab (one after another: the watch answers one at a time). */
+    /**
+     * Reads the Sport / Settings values. The last values are shown at once (kept on the phone);
+     * a read that fails — e.g. while a step sync keeps the watch busy — is retried every
+     * [SETTINGS_RETRY_MS] for a few minutes instead of leaving the card waiting.
+     */
     fun refreshSettings() {
         if (!api.isH5600SettingsSupported()) return
-        run("read settings") {
-            val basic = readOrNull { api.getH5600Basic() }
-            val physical = readOrNull { api.getH5600Physical() }
-            val goal = readOrNull { api.getH5600StepGoal() }
-            val hr = readOrNull { api.getH5600HeartRateMonitorCode() }
-            val modes = readOrNull { api.getH5600ModeList() }
-            basic?.let { H5600Prefs.saveNightTime(context, it.nightStartHour * 60 + it.nightStartMin, it.nightEndHour * 60 + it.nightEndMin) }
-            val known = modes?.let { rememberModes(it) } ?: knownModes()
-            _state.update {
-                it.copy(
-                    modeList = modes ?: it.modeList, knownModes = known,
-                    basic = basic ?: it.basic, physical = physical ?: it.physical,
-                    stepGoal = goal ?: it.stepGoal,
-                    hrMonitorCode = fresh(KEY_HR, hr, it.hrMonitorCode),
-                )
+        settingsRetry?.cancel()
+        readSettings(attempt = 0)
+    }
+
+    private var settingsRetry: kotlinx.coroutines.Job? = null
+
+    private fun readSettings(attempt: Int): Unit = run("read settings") {
+        val basic = readOrNull { api.getH5600Basic() }
+        val physical = readOrNull { api.getH5600Physical() }
+        val goal = readOrNull { api.getH5600StepGoal() }
+        val hr = readOrNull { api.getH5600HeartRateMonitorCode() }
+        val modes = readOrNull { api.getH5600ModeList() }
+        basic?.let { H5600Prefs.saveNightTime(context, it.nightStartHour * 60 + it.nightStartMin, it.nightEndHour * 60 + it.nightEndMin) }
+        val known = modes?.let { rememberModes(it) } ?: knownModes()
+        _state.update {
+            it.copy(
+                modeList = fresh(KEY_MODES, modes, it.modeList), knownModes = known,
+                basic = fresh(KEY_BASIC, basic, it.basic), physical = fresh(KEY_PHYSICAL, physical, it.physical),
+                stepGoal = fresh(KEY_GOAL, goal, it.stepGoal),
+                hrMonitorCode = fresh(KEY_HR, hr, it.hrMonitorCode),
+            )
+        }
+        saveSettingsCache()
+        val missed = listOf(basic, physical, goal, hr, modes).any { it == null }
+        if (missed && attempt < SETTINGS_RETRIES) {
+            Timber.i("H5600 settings read incomplete (attempt ${attempt + 1}), retrying")
+            settingsRetry = viewModelScope.launch {
+                kotlinx.coroutines.delay(SETTINGS_RETRY_MS)
+                readSettings(attempt + 1)
             }
         }
+    }
+
+    // ---- Sport / Settings values kept on the phone, shown before the watch answers ----
+
+    private fun saveSettingsCache() {
+        val st = _state.value
+        val o = org.json.JSONObject()
+        st.basic?.let { b -> o.put("basic", org.json.JSONArray(listOf(if (b.stepReminder) 1 else 0, b.nightStartHour, b.nightStartMin, b.nightEndHour, b.nightEndMin))) }
+        st.physical?.let { p -> o.put("physical", org.json.JSONArray(listOf(p.sleepStartHour, p.sleepStartMin, p.wakeHour, p.wakeMin, p.maxHr, if (p.maxHrManual) 1 else 0, p.restingHr, if (p.restingHrManual) 1 else 0, p.vo2Max))) }
+        st.stepGoal?.let { g -> o.put("goal", org.json.JSONArray(listOf(g.steps, if (g.notifyWhenReached) 1 else 0))) }
+        st.modeList?.let { m -> o.put("modes", org.json.JSONArray(m)) }
+        org.avmedia.gshockGoogleSync.utils.LastKnown.put(context, "h5600_settings", o.toString())
+        st.hrMonitorCode?.let { org.avmedia.gshockGoogleSync.utils.LastKnown.put(context, "hr_monitor", it) }
+    }
+
+    private fun loadSettingsCache(): UiState.() -> UiState = {
+        runCatching {
+            val o = org.json.JSONObject(org.avmedia.gshockGoogleSync.utils.LastKnown.string(context, "h5600_settings") ?: "{}")
+            val ints = { k: String -> o.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.getInt(it) } } }
+            copy(
+                basic = ints("basic")?.let { v -> org.avmedia.gshockapi.model.H5600Basic(v[0] == 1, v[1], v[2], v[3], v[4]) },
+                physical = ints("physical")?.let { v -> org.avmedia.gshockapi.model.H5600Physical(v[0], v[1], v[2], v[3], v[4], v[5] == 1, v[6], v[7] == 1, v[8]) },
+                stepGoal = ints("goal")?.let { v -> org.avmedia.gshockapi.model.StepGoal(v[0], v[1] == 1) },
+                modeList = ints("modes"),
+                knownModes = knownModes(),
+            )
+        }.getOrDefault(this)
     }
 
     // Quick taps (+/- buttons, toggles): the UI moves at once, one watch write after the last tap.
@@ -282,7 +338,7 @@ class H5600ViewModel @Inject constructor(
         val b = _state.value.basic ?: return
         val nb = b.copy(stepReminder = on)
         _state.update { it.copy(basic = nb) }
-        debouncedWrite("basic", "step reminder") { api.setH5600Basic(nb) }
+        debouncedWrite(KEY_BASIC, "step reminder") { api.setH5600Basic(nb) }
     }
 
     /** Saves a new mode order / visibility (one write); Time & date always stays first. */
@@ -291,7 +347,7 @@ class H5600ViewModel @Inject constructor(
         val before = _state.value.modeList
         _state.update { it.copy(modeList = list) }
         // One write per Save (the card keeps edits as a draft until then).
-        run("watch modes", onError = { _state.update { it.copy(modeList = before) } }) { api.setH5600ModeList(list) }
+        write(KEY_MODES, "watch modes", onError = { _state.update { it.copy(modeList = before) } }) { api.setH5600ModeList(list) }
     }
 
     // Every mode the watch has listed, in first-seen order (hidden modes vanish from 0x52).
@@ -307,7 +363,7 @@ class H5600ViewModel @Inject constructor(
 
     fun setPhysical(v: org.avmedia.gshockapi.model.H5600Physical) {
         _state.update { it.copy(physical = v) }
-        debouncedWrite("physical", "heart-rate / sleep settings") { api.setH5600Physical(v) }
+        debouncedWrite(KEY_PHYSICAL, "heart-rate / sleep settings") { api.setH5600Physical(v) }
     }
 
     /**
@@ -320,7 +376,7 @@ class H5600ViewModel @Inject constructor(
         val nb = b.copy(nightStartHour = startH, nightStartMin = startM, nightEndHour = endH, nightEndMin = endM)
         val np = p?.copy(sleepStartHour = startH, sleepStartMin = startM, wakeHour = endH, wakeMin = endM)
         _state.update { it.copy(basic = nb, physical = np ?: it.physical) }
-        run("night time", onError = { refreshSettings() }) {
+        write(KEY_BASIC, "night time", onError = { refreshSettings() }) {
             api.setH5600Basic(nb)
             if (np != null) api.setH5600Physical(np)
             H5600Prefs.saveNightTime(context, startH * 60 + startM, endH * 60 + endM)
@@ -338,7 +394,7 @@ class H5600ViewModel @Inject constructor(
 
     fun setStepGoal(g: org.avmedia.gshockapi.model.StepGoal) {
         _state.update { it.copy(stepGoal = g) }
-        debouncedWrite("goal", "step goal") { api.setH5600StepGoal(g) }
+        debouncedWrite(KEY_GOAL, "step goal") { api.setH5600StepGoal(g) }
     }
 
     /** Sets the heart-rate monitor mode (0x41) and confirms it from the watch. */
@@ -364,7 +420,18 @@ class H5600ViewModel @Inject constructor(
     /** The mode to go back to when all-day monitoring is turned off from the watch-face dialog. */
     fun hrModeWhenOff(): HeartRateMonitor =
         H5600Prefs.get(context).getInt(KEY_HR_BEFORE_ALL_DAY, -1).let(HeartRateMonitor::fromCode)
-            ?.takeIf { it != HeartRateMonitor.ALL_DAY } ?: HeartRateMonitor.ACTIVITY_AND_NIGHT
+            ?.takeIf { it != HeartRateMonitor.ALL_DAY }
+            // smart alarms need heart-rate monitoring: never fall back to Off while one is on
+            ?.takeIf { it != HeartRateMonitor.OFF || smartAlarms().isEmpty() }
+            ?: HeartRateMonitor.ACTIVITY_AND_NIGHT
+
+    /**
+     * Enabled smart alarms, as "08:10 Weekdays". The watch's smart alarm needs heart-rate
+     * measurement All day or Activities + night (Casio 3516 manual); with Off it cannot sense light sleep.
+     */
+    fun smartAlarms(): List<String> =
+        AlarmPool.load(context).orEmpty().filter { it.enabled && it.isSmart }
+            .map { a -> org.avmedia.gshockGoogleSync.utils.AppTimeFormat.hm(a.hour, a.minute) + (if (a.label.isEmpty()) "" else " " + a.label) }
 
     /**
      * Face-2 item choice: [item] null = Auto (Steps / Sun data around sunset, driven by the phone),
@@ -490,6 +557,12 @@ class H5600ViewModel @Inject constructor(
         private const val KEY_FACE_NO = "face_no"
         private const val KEY_SOUND = "sound"
         private const val KEY_HR = "hr"
+        private const val KEY_BASIC = "basic"
+        private const val KEY_PHYSICAL = "physical"
+        private const val KEY_GOAL = "goal"
+        private const val KEY_MODES = "modes"
+        private const val SETTINGS_RETRY_MS = 30_000L
+        private const val SETTINGS_RETRIES = 6 // 3 min: longer than a step sync
         const val TIME_AND_DATE = 0x01
         // The user's DW-H5600 list as first read (2026-11-17), before anything was hidden.
         private val DEFAULT_MODES = listOf(0x01, 0x0F, 0x0E, 0x11, 0x10, 0x02, 0x08, 0x09, 0x0A, 0x03, 0x05, 0x06)

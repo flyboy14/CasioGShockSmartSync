@@ -430,11 +430,38 @@ internal fun HeartRateMonitorCard(vm: H5600ViewModel) {
             )
             CardTitle("Heart-rate monitor", options.joinToString("<br><br>") { (m, d) -> "${hrModeLabel(m)}: $d" } +
                 "<br><br>The Heart rate item on the watch face needs All day; the app asks when you pick it.")
+            // Off while a smart alarm is on: ask first (smart alarms need heart-rate monitoring).
+            var confirmOff by remember { mutableStateOf<List<String>?>(null) }
             if (s.hrMonitorCode == null) org.avmedia.gshockGoogleSync.ui.common.LoadingSpinner()
             else Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
                 options.forEach { (m, _) ->
-                    AppChoiceButton(text = hrModeLabel(m), selected = s.hrMonitor == m, onClick = { vm.setHeartRateMonitor(m) })
+                    AppChoiceButton(text = hrModeLabel(m), selected = s.hrMonitor == m, onClick = {
+                        val smart = vm.smartAlarms()
+                        if (m == org.avmedia.gshockapi.model.HeartRateMonitor.OFF && smart.isNotEmpty()) confirmOff = smart
+                        else vm.setHeartRateMonitor(m)
+                    })
                 }
+            }
+            confirmOff?.let { smart ->
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { confirmOff = null },
+                    title = { androidx.compose.material3.Text("Turn off heart-rate monitoring?") },
+                    text = {
+                        androidx.compose.material3.Text(
+                            "Smart alarms need it to sense light sleep. Without it, " + smart.joinToString(", ") +
+                                (if (smart.size == 1) " rings" else " ring") + " at the set time, with no early smart wake.",
+                        )
+                    },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(onClick = {
+                            confirmOff = null
+                            vm.setHeartRateMonitor(org.avmedia.gshockapi.model.HeartRateMonitor.OFF)
+                        }) { androidx.compose.material3.Text("Turn off") }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(onClick = { confirmOff = null }) { androidx.compose.material3.Text("Keep on") }
+                    },
+                )
             }
             if (s.hrMonitorCode != null && s.hrMonitor == null)
                 AppText(text = "Unknown mode (code 0x%02X)".format(s.hrMonitorCode), fontSize = 13.sp)

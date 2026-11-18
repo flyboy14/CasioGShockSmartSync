@@ -117,6 +117,9 @@ Always:
   the `UiState` defaults.
 - Reads that only a tab needs go in `refreshSettings()`, called by that tab (`LaunchedEffect(Unit)`),
   not in `refresh()`, which runs for the Custom tab on every start.
+- Values a tab shows are kept on the phone (`saveSettingsCache` / `loadSettingsCache`) and shown at
+  once; the watch read updates them. A read that fails (the watch is busy during a step sync) is
+  retried every 30 s for 3 min (`readSettings(attempt)`), never left as a spinner.
 - Never swallow errors silently: a `runCatching` without `onFailure { Timber.e(…) }` hid a Health bug
   for a whole test round.
 
