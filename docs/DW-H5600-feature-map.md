@@ -52,6 +52,7 @@ Status: **Have** = already in the fork · **Ready** = layout known and the watch
 | Smart alarm | `0x50` | `configurationSnooze`, `smartWakeupNotification` | **Have** — part of the Alarms tab: any alarm can be smart; the phone loads the next one into the watch's single smart slot |
 | Countdown timer | `0x18` | `hour`, `minute`, `second` | Have (fixed) |
 | Interval / training alerts (every N min / km / kcal) | `0x55` | `time1/2Interval`, `distance1/2Interval`, `caloriesInterval`, `…Repeat` | Partly (watch reply not captured yet) |
+| Interval (program) timer | `0x2A` | segments (CASIO `WatchSettingForProgramTmrData`) | Not planned: not used (decided 2026-11-18) |
 
 ## Activity (workout) settings
 
