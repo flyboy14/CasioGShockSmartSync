@@ -39,7 +39,8 @@ import java.util.Locale
 
 private val WEEKDAYS = setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY)
 private val WEEKEND = setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)
-private val SMART_WINDOWS = listOf(0, 15, 30, 45, 60)
+private val SMART_WINDOWS = listOf(15, 30, 45, 60)
+private const val DEFAULT_SMART_WINDOW = 30
 
 /** "Once · Tue 18 Nov", "Mon–Fri", … */
 fun repeatLabel(a: PhoneAlarm): String =
@@ -50,7 +51,7 @@ fun repeatLabel(a: PhoneAlarm): String =
 fun optionsSummary(a: PhoneAlarm): String = listOfNotNull(
     repeatLabel(a),
     if (a.vibeOnly) "vibe only" else "sound + vibe",
-    if (a.snooze) "snooze" else "no snooze",
+    if (a.snoozes) "snooze ${a.snoozeMin} min" else "no snooze",
     if (a.isSmart) "smart −${a.smartWindowMin} min" else null,
 ).joinToString(" · ")
 
@@ -110,25 +111,67 @@ fun AlarmEditorDialog(initial: PhoneAlarm, isNew: Boolean, onSave: (PhoneAlarm) 
                     AppChoiceButton("Vibe only", a.vibeOnly, { a = a.copy(vibeOnly = true) })
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    AppText("Snooze")
-                    AppSwitch(checked = a.snooze, onCheckedChange = { a = a.copy(snooze = it) })
-                }
+                // Off by default; switching on shows a slider for the interval / window.
+                ToggleSlider(
+                    label = "Snooze",
+                    value = a.snoozeMin,
+                    choices = AlarmPool.SNOOZE_CHOICES,
+                    defaultOn = AlarmPool.DEFAULT_SNOOZE_MIN,
+                    valueText = { "every $it min" },
+                    onChange = { a = a.copy(snoozeMin = it) },
+                )
+                if (a.snoozes) AppText(
+                    "Rings again every ${a.snoozeMin} min until you stop it in the app or the notification" +
+                        (if (a.isSmart) " (from %s on).".format(AppTimeFormat.hm(a.hour, a.minute)) else "."),
+                    fontSize = 12.sp,
+                )
 
-                Section("Smart wake (light sleep)")
-                Choices {
-                    SMART_WINDOWS.forEach { w ->
-                        AppChoiceButton(if (w == 0) "Off" else "−$w min", a.smartWindowMin == w, { a = a.copy(smartWindowMin = w) })
-                    }
-                }
+                ToggleSlider(
+                    label = "Smart wake",
+                    value = a.smartWindowMin,
+                    choices = SMART_WINDOWS,
+                    defaultOn = DEFAULT_SMART_WINDOW,
+                    valueText = { "up to $it min early" },
+                    onChange = { a = a.copy(smartWindowMin = it) },
+                )
                 if (a.isSmart) AppText("Wakes you up to ${a.smartWindowMin} min early, in light sleep.", fontSize = 12.sp)
             }
         },
     )
+}
+
+/**
+ * A switch (on when [value] > 0); while on, a slider over [choices] (minutes). Switching on picks the
+ * value used last in this dialog, else [defaultOn]; off sets 0. A value not in [choices] snaps to
+ * the nearest one.
+ */
+@Composable
+private fun ToggleSlider(
+    label: String,
+    value: Int,
+    choices: List<Int>,
+    defaultOn: Int,
+    valueText: (Int) -> String,
+    onChange: (Int) -> Unit,
+) {
+    var lastOn by remember { mutableStateOf(if (value > 0) value else defaultOn) }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AppText(if (value > 0) "$label · ${valueText(value)}" else label, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        AppSwitch(checked = value > 0, onCheckedChange = { on -> onChange(if (on) lastOn else 0) })
+    }
+    if (value > 0) {
+        val index = choices.indices.minBy { kotlin.math.abs(choices[it] - value) }
+        androidx.compose.material3.Slider(
+            value = index.toFloat(),
+            onValueChange = { v -> choices[Math.round(v).coerceIn(choices.indices)].let { lastOn = it; onChange(it) } },
+            valueRange = 0f..choices.lastIndex.toFloat(),
+            steps = choices.size - 2,
+        )
+    }
 }
 
 @Composable

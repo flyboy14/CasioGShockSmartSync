@@ -14,11 +14,11 @@ import timber.log.Timber
 import javax.inject.Inject
 
 /**
- * One notification per alarm that is snoozing on the watch, with a "Stop snooze" button. On the
- * DW-H5600 a button press while it rings does not end the snooze; only the app (or this
- * notification) stops it, so the snooze runs until the end of its window unless stopped here.
- * The watch does not report snooze state, so these follow the phone's snooze window
- * ([AlarmPool.snoozing]) and disappear when it ends or the snooze is stopped.
+ * One notification per snoozing alarm, with a "Stop snooze" button. The snooze is the phone's
+ * ([AlarmPool.snoozing]): the alarm rings again every few minutes, without end, until it is stopped
+ * here or on the Alarms tab. A button press on the watch only silences one ring.
+ * The text follows the next repeat time; it is posted again (silently) when that changes, so a
+ * notification swiped away comes back after the next ring.
  */
 object SnoozeNotifier {
     // High importance = shown on screen as a banner (heads-up), not only in the bar. A channel's
@@ -28,48 +28,49 @@ object SnoozeNotifier {
     const val ACTION_STOP = "org.avmedia.gshockGoogleSync.h5600.STOP_SNOOZE"
     const val EXTRA_ID = "alarm_id"
 
-    /** Ids of the alarms that currently have a notification (to cancel the ones that ended). */
-    private val shown = mutableSetOf<String>()
+    /** Alarm id -> text of its notification now (to cancel ended ones and skip unchanged ones). */
+    private val shown = mutableMapOf<String, String>()
 
     private fun notificationId(alarmId: String) = 0x5500 + (alarmId.hashCode() and 0xFFF)
 
+    /** [snoozing]: each snoozing alarm with its next repeat time. */
     @Synchronized
-    /** [snoozing]: each snoozing alarm with the time its snooze ends. */
     fun update(context: Context, snoozing: List<Pair<PhoneAlarm, java.time.LocalDateTime>>) {
         val nm = context.getSystemService(NotificationManager::class.java) ?: return
         nm.deleteNotificationChannel(OLD_CHANNEL_ID)
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Alarm snooze (watch)", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Shows while a watch alarm is snoozing; lets you stop the snooze"
+                description = "Shows while a watch alarm is snoozing; stops the snooze"
                 setSound(null, null) // the watch is the alarm; the phone only shows the banner
                 enableVibration(false)
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
             },
         )
         val ids = snoozing.map { it.first.id }.toSet()
-        (shown - ids).forEach { nm.cancel(notificationId(it)) }
-        shown.retainAll(ids)
-        snoozing.filter { it.first.id !in shown }.forEach { (a, until) ->
+        (shown.keys - ids).forEach { nm.cancel(notificationId(it)) }
+        shown.keys.retainAll(ids)
+        snoozing.forEach { (a, next) ->
+            val title = AppTimeFormat.hm(a.hour, a.minute) + (if (a.label.isEmpty()) "" else " · ${a.label}") +
+                " · next " + AppTimeFormat.hm(next.hour, next.minute)
+            if (shown[a.id] == title) return@forEach
             val stop = PendingIntent.getBroadcast(
                 context, notificationId(a.id),
                 Intent(context, SnoozeStopReceiver::class.java).setAction(ACTION_STOP).putExtra(EXTRA_ID, a.id),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
-            val end = AppTimeFormat.hm(until.hour, until.minute)
-            val title = AppTimeFormat.hm(a.hour, a.minute) + (if (a.label.isEmpty()) "" else " · ${a.label}") + " · snoozing until $end"
             val n = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
                 .setContentTitle(title)
-                .setContentText("Repeats every 5 min until $end. Stop it here when you are up.")
+                .setContentText("Rings every ${a.snoozeMin} min until you stop it.")
                 .setPriority(NotificationCompat.PRIORITY_HIGH) // heads-up on older Android versions
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setOnlyAlertOnce(true)
-                .setOngoing(false)
+                .setOngoing(true) // the snooze has no end: keep the Stop button at hand
                 .addAction(0, "Stop snooze", stop)
                 .build()
             runCatching { nm.notify(notificationId(a.id), n) }.onFailure { Timber.w(it, "snooze notification") }
-            shown += a.id
+            shown[a.id] = title
         }
     }
 

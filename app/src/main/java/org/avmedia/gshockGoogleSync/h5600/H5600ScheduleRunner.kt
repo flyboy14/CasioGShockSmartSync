@@ -31,8 +31,9 @@ import javax.inject.Singleton
 /**
  * Phone-side scheduler for what the DW-H5600 cannot do itself:
  *  - alarms ([AlarmPool]): loads the next alarms into the 4 slots + the smart-alarm slot, sets the
- *    watch's single sound mode for the alarm due next, and switches finished one-time alarms off —
- *    1 minute after every alarm time and, for alarms with snooze, again when snoozing is over;
+ *    watch's single sound mode for the alarm due next, switches finished one-time alarms off, and
+ *    snoozes: moves a snoozing alarm's slot to its next repeat a minute after each ring, until the
+ *    snooze is stopped from the phone (the watch's own snooze is never used);
  *  - sun data: a loc/time sync on connect and every quarter hour (weather trick: [TempSun]);
  *  - dynamic watch face ([SunFace]) at the edges of the sunset window.
  * Runs once when the watch connects (before the regular connection actions) and, while it stays
@@ -106,7 +107,7 @@ class H5600ScheduleRunner @Inject constructor(
                 alarmsQueued = false // later edits queue a new pass; this one sees all edits up to now
                 if (api.isH5600SettingsSupported()) {
                     val notes = mutableListOf<String>()
-                    onAlarmPass(applyAlarmsLocked(notes, userAction = true))
+                    onAlarmPass(applyAlarmsLocked(notes))
                     record(notes)
                 }
             }
@@ -114,9 +115,9 @@ class H5600ScheduleRunner @Inject constructor(
         }
     }
 
-    /** The "snoozing until … · Stop snooze" notification for each snoozing alarm. */
+    /** The "snoozing · next HH:MM · Stop snooze" notification for each snoozing alarm. */
     private fun showSnoozing(snoozing: List<Pair<AlarmPool.PhoneAlarm, LocalDateTime>>) =
-        SnoozeNotifier.update(context, snoozing.map { (a, ring) -> a to AlarmPool.holdEnd(a, ring) })
+        SnoozeNotifier.update(context, snoozing)
 
     /** Stop snooze from a screen or the notification, in the background. */
     fun requestStopSnooze(id: String) = background("stop snooze") { stopSnooze(id) }
@@ -154,14 +155,8 @@ class H5600ScheduleRunner @Inject constructor(
         }
     }
 
-    /**
-     * The world city changed on the Time tab: sync now, in the background. Not while an alarm may be
-     * snoozing (a time sync cancels the snooze); the next quarter-hour sync then picks it up.
-     */
-    fun requestWorldCitySync() = background("world city") {
-        if (snoozeActive()) { Timber.i("World city: snooze window, applied at the next sync"); return@background }
-        syncLocationAndTime()
-    }
+    /** The world city changed on the Time tab: sync now, in the background. */
+    fun requestWorldCitySync() = background("world city") { syncLocationAndTime() }
 
     /**
      * Coordinates to send in 0x24: the phone's location, or, with "Temperature instead of sunrise"
@@ -242,58 +237,46 @@ class H5600ScheduleRunner @Inject constructor(
         return watchCall("sun re-send") { syncTimeAndLocation(); "sun data re-sent" }
     }
 
-    /**
-     * A time sync cancels a running snooze on the watch (tested 2026-11-17: snoozed 12:10 alarm, a
-     * time sync at 12:10:46, no repeat at 12:15). So automatic syncs wait while an alarm with snooze
-     * is still snoozing; they catch up on the next quarter-hour tick after the window.
-     */
-    private fun snoozeActive(now: LocalDateTime = LocalDateTime.now()): Boolean =
-        AlarmPool.load(context)?.let { AlarmPool.snoozing(it, now).isNotEmpty() } == true
-
     /** Called once per connection when the session is Ready. */
     suspend fun onConnected(applySchedule: Boolean) {
         if (!api.isH5600SettingsSupported()) return
         watchCall("0x39 handshake") { withTimeout(15_000) { api.h5600ConnectionHandshake() } }
         // Smart Sync's connect routine rewrites the home / world-city packets (1D/1E/1F), which makes
         // the watch drop its sun location -> dashes. One loc/time sync per connection fixes it, and
-        // also counts as this quarter's sun re-send — unless an alarm is snoozing (see above).
-        if (snoozeActive()) Timber.i("H5600: loc/time sync on connect postponed (alarm snoozing)")
-        else {
-            // Weather due as well? Fetch it first, so this one sync carries it — instead of a second
-            // full time sync from the weather refresh a few seconds later.
-            if (TempSun.isEnabled(context) && TempSun.isStale(context)) {
-                LocationProvider.getLocation(context)?.let { loc ->
-                    watchCall("weather on connect") {
-                        withContext(Dispatchers.IO) { TempSun.fetchTemperature(context, loc.latitude, loc.longitude) }
-                    }
+        // also counts as this quarter's sun re-send. (A time sync would cancel the watch's own
+        // snooze, but the phone does the snoozing, so syncs never have to wait.)
+        // Weather due as well? Fetch it first, so this one sync carries it — instead of a second
+        // full time sync from the weather refresh a few seconds later.
+        if (TempSun.isEnabled(context) && TempSun.isStale(context)) {
+            LocationProvider.getLocation(context)?.let { loc ->
+                watchCall("weather on connect") {
+                    withContext(Dispatchers.IO) { TempSun.fetchTemperature(context, loc.latitude, loc.longitude) }
                 }
             }
-            watchCall("loc/time sync on connect") { syncTimeAndLocation() }
         }
+        watchCall("loc/time sync on connect") { syncTimeAndLocation() }
         if (applySchedule) applyIfEnabled()
     }
 
     /**
-     * Stops alarm [id]'s snooze: a time sync (which cancels the snooze on the watch), then the hold
-     * ends right away (slot freed, sound mode for the next alarm, one-time alarm off).
+     * Stops alarm [id]'s snooze: saved on the phone first (it is the source of truth), then the
+     * slot goes back to the alarm's own time (or the next alarm), the sound mode to the next alarm /
+     * the user's, and a one-time alarm switches off. A failed watch write is retried like any edit.
      */
     suspend fun stopSnooze(id: String) = mutex.withLock {
-        if (!api.isH5600SettingsSupported()) return@withLock
         val now = LocalDateTime.now()
         val pool = AlarmPool.load(context) ?: return@withLock
         val target = AlarmPool.snoozing(pool, now).firstOrNull { it.first.id == id } ?: return@withLock
-        val notes = mutableListOf<String>()
-        if (watchCall("stop snooze", notes) { syncTimeAndLocation() } == null) {
-            // Not stopped: bring the button and the notification back so it can be tried again.
-            record(notes)
-            showSnoozing(AlarmPool.snoozing(pool, now))
+        val stopped = AlarmPool.dismiss(pool, id, now)
+        AlarmPool.save(context, stopped)
+        if (!api.isH5600SettingsSupported()) { // not connected: the watch gets it on the next connect
+            showSnoozing(AlarmPool.snoozing(stopped, now))
             onPoolChanged?.invoke()
-            org.avmedia.gshockGoogleSync.ui.common.AppSnackbar("Stop snooze did not reach the watch — try again")
             return@withLock
         }
-        AlarmPool.save(context, AlarmPool.dismiss(pool, id, now))
+        val notes = mutableListOf<String>()
         notes += "snooze stopped: " + AppTimeFormat.hm(target.first.hour, target.first.minute)
-        onAlarmPass(applyAlarmsLocked(notes, userAction = true))
+        onAlarmPass(applyAlarmsLocked(notes))
         record(notes)
         onPoolChanged?.invoke()
         wake.trySend(Unit)
@@ -319,7 +302,7 @@ class H5600ScheduleRunner @Inject constructor(
     suspend fun applyAlarms() = mutex.withLock {
         if (!api.isH5600SettingsSupported()) return@withLock
         val notes = mutableListOf<String>()
-        onAlarmPass(applyAlarmsLocked(notes, userAction = true))
+        onAlarmPass(applyAlarmsLocked(notes))
         record(notes)
         wake.trySend(Unit)
     }
@@ -349,16 +332,14 @@ class H5600ScheduleRunner @Inject constructor(
         H5600Schedule.recordApplied(context, "$stamp: " + (notes.joinToString("; ").ifEmpty { "no change needed" }))
     }
 
-    /** Alarm slots, smart-alarm slot and sound mode for the alarm due next. */
     /**
-     * [userAction]: an edit on the Alarms tab or Stop snooze — written even while an alarm may be
-     * snoozing. Automatic passes leave the alarm and smart-alarm slots alone during a snooze window,
-     * because rewriting them (like a time sync) seems to cancel the snooze on the watch.
+     * Alarm slots (snoozing alarms at their next repeat), smart-alarm slot and sound mode for the
+     * alarm due next.
      */
-    private suspend fun applyAlarmsLocked(notes: MutableList<String>, userAction: Boolean = false): Boolean {
+    private suspend fun applyAlarmsLocked(notes: MutableList<String>): Boolean {
         val loaded = AlarmPool.load(context) ?: return true // null until the Alarms tab has been opened once
         val now = LocalDateTime.now()
-        // One-time alarms that have rung (and finished snoozing) switch themselves off.
+        // One-time alarms that have rung (and whose snooze was stopped) switch themselves off.
         val pool = AlarmPool.expireOnce(loaded, now)
         if (pool != loaded) {
             AlarmPool.save(context, pool)
@@ -369,16 +350,9 @@ class H5600ScheduleRunner @Inject constructor(
             withTimeout(45_000) {
                 val watch = api.getAlarms() // the library shares/retries concurrent reads
                 val plan = AlarmPool.plan(pool, AlarmPool.loadedIds(context), now)
-                val wanted = AlarmPool.toWatchAlarms(plan, pool, watch)
-                val holdWrites = !userAction && AlarmPool.snoozing(pool, now).isNotEmpty()
+                val wanted = AlarmPool.toWatchAlarms(plan, pool, watch, now)
                 if (!AlarmPool.sameOnWatch(wanted, watch)) {
                     Timber.i("H5600 alarms differ:\n watch =${watch.map { "${it.hour}:${it.minute} on=${it.enabled} sz=${it.snooze} 1x=${it.oneTime} ch=${it.hasHourlyChime}" }}\n wanted=${wanted.map { "${it.hour}:${it.minute} on=${it.enabled} sz=${it.snooze} 1x=${it.oneTime} ch=${it.hasHourlyChime}" }}")
-                }
-                if (holdWrites && !AlarmPool.sameOnWatch(wanted, watch)) {
-                    notes += "alarm slots: change waits until snoozing is over"
-                    return@withTimeout
-                }
-                if (!AlarmPool.sameOnWatch(wanted, watch)) {
                     api.setAlarms(ArrayList(wanted))
                     notes += "watch alarms: " + wanted.take(AlarmPool.SLOTS)
                         .joinToString(" ") { if (it.enabled) AppTimeFormat.hm(it.hour, it.minute) else "–" }
@@ -386,13 +360,14 @@ class H5600ScheduleRunner @Inject constructor(
                 AlarmPool.saveLoadedIds(context, plan)
 
                 // Smart-alarm slot (0x50): the next smart alarm within 24 h, or off.
-                val smartId = AlarmPool.planSmart(pool, AlarmPool.loadedSmartId(context), now)
+                val smartId = AlarmPool.planSmart(pool, now)
                 val smart = pool.firstOrNull { it.id == smartId }
                 val current = api.getH5600SmartAlarm()
                 if (current != null) {
-                    val wantedSmart = smart?.let { SmartAlarm(it.hour, it.minute, true, it.snooze, it.smartWindowMin) }
+                    // Watch snooze off: the phone snoozes it from the target time (a normal slot).
+                    val wantedSmart = smart?.let { SmartAlarm(it.hour, it.minute, true, false, it.smartWindowMin) }
                         ?: current.copy(enabled = false)
-                    if (wantedSmart != current && !holdWrites) {
+                    if (wantedSmart != current) {
                         api.setH5600SmartAlarm(wantedSmart)
                         notes += "smart alarm: " + (smart?.let { AppTimeFormat.hm(it.hour, it.minute) + " (−${it.smartWindowMin} min)" } ?: "off")
                     }
@@ -416,7 +391,8 @@ class H5600ScheduleRunner @Inject constructor(
 
     /** Quarter-hourly: weather fetch (option on) or plain sun-data re-send (option off). */
     private suspend fun applyPeriodicLocked(notes: MutableList<String>) {
-        if (snoozeActive()) return // a time sync would cancel the snooze; catch up after the window
+        // Not while an alarm or a snooze repeat rings; the pass a minute later catches up.
+        if (AlarmPool.load(context)?.let { AlarmPool.ringing(it, LocalDateTime.now()) } == true) return
         refreshTempSunLocked(force = false)?.let { notes += it }
         resendSunIfDue()?.let { notes += it }
     }
@@ -447,22 +423,12 @@ class H5600ScheduleRunner @Inject constructor(
             Timber.e(e, "H5600 $what failed"); notes?.add("$what failed (${e.message})"); null
         }
 
-    private fun minuteOfDay(m: Int) = ((m % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY
-
-    /** Next time [minute] (minute of day) occurs strictly after [now]. */
-    private fun nextOccurrence(minute: Int, now: LocalDateTime): LocalDateTime {
-        val today = now.toLocalDate().atStartOfDay().plusMinutes(minuteOfDay(minute).toLong())
-        return if (today.isAfter(now)) today else today.plusDays(1)
-    }
-
-    /** Next alarm-related boundary: 1 and HOLD minutes after every alarm, and before smart windows. */
+    /** Next alarm-related boundary: after every ring and snooze repeat, smart windows, sound windows. */
     private fun nextAlarmBoundary(now: LocalDateTime): LocalDateTime? {
         val pool = AlarmPool.load(context)?.filter { it.enabled }.orEmpty()
-        // slot reloads: 1 and HOLD minutes after every alarm
-        val slots = pool.flatMap { a -> listOf(a.minuteOfDay + 1, a.minuteOfDay + AlarmPool.holdMin(a).toInt()) }
-            .map { nextOccurrence(it, now) }
         // sound mode: start and end of each alarm's sound window
-        return (slots + listOfNotNull(
+        return (listOfNotNull(
+            AlarmPool.nextBoundary(pool, now), // slot reloads: a minute after each ring / repeat
             AlarmPool.nextSoundBoundary(pool, now),
             AlarmPool.nextNightBoundary(H5600Prefs.nightDnd(context), now), // do not disturb: night edges
         )).minOrNull()
@@ -509,9 +475,5 @@ class H5600ScheduleRunner @Inject constructor(
         session.state.first { it.phase is SessionPhase.Closed }
         loop.cancel()
         SchedulerWakeup.cancel(context) // nothing to do on the watch until it reconnects
-    }
-
-    private companion object {
-        const val MINUTES_PER_DAY = 24 * 60
     }
 }

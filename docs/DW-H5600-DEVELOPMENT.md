@@ -170,15 +170,16 @@ for alarms, the face in Auto, the sun data / weather. The rule for all of them:
 - **The decision is a pure function of (data, now, base)** in a plain object, so it is unit-tested
   (`AlarmPool.desiredSoundMode`, `AlarmPool.baseAt`, `SunFace.desiredFace`; tests in `AlarmPoolTest`).
 - **Windows are explicit:** start and end times (`AlarmPool.soundWindow`: 5 min before the alarm
-  (before a smart window) → end of the ring / snooze / stopped snooze; night window for DND).
+  (before a smart window) → end of the ring / stopped snooze; night window for DND).
 - **The scheduler wakes at every edge** (`nextAlarmBoundary` collects `nextSoundBoundary`,
-  `nextNightBoundary`, slot reloads) with exact Android alarms, and each pass writes only when the
+  `nextNightBoundary`, `AlarmPool.nextBoundary` — a minute after each ring and snooze repeat) with exact Android alarms, and each pass writes only when the
   watch differs (`api.setSoundMode` reads first and skips equal writes).
-- **Protect running alarms:** time syncs and alarm-slot writes cancel a snooze on the watch, so
-  automatic passes hold them during a snooze window (`AlarmPool.snoozing`). The snooze state is
-  known, not guessed: the watch sends nothing, but a button press while it rings does not end the
-  snooze (only switching the alarm off on the watch does), so a snooze runs its whole window unless
-  the phone stops it (`AlarmPool.dismiss`, `SnoozeNotifier`).
+- **Snooze is phone-side:** the watch's snooze is never used (time syncs and slot writes cancel it,
+  and it gives up after 7 repeats). A snoozing alarm's slot is rewritten to its next repeat a
+  minute after each ring (`AlarmPool.slotTime`), until the phone stops it (`AlarmPool.dismiss`,
+  `SnoozeNotifier`). Never write to the watch during a ring minute (`AlarmPool.ringing`): the
+  quarter-hour sync skips it, and slot writes happen a minute after a ring (so an interval must
+  be at least 2 min; the editor offers 5–30).
 - A user change that affects the timetable (alarm edit, night time, DND switch) calls
   `runner.applyAlarms()` so the watch is updated at once and the next wake-up is re-planned.
 - Inputs that are not time (the Wi-Fi network for *Sun at home*) are followed with Android callbacks

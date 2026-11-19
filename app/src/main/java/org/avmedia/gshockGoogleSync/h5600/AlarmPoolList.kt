@@ -162,8 +162,9 @@ fun H5600AlarmPoolList(vm: H5600AlarmPoolViewModel = hiltViewModel()) {
         AppText(
             text = "Any number of alarms. The watch holds ${AlarmPool.SLOTS}, so the phone keeps the alarms " +
                 "due in the next 24 h on the watch (\"on watch\") and swaps them as they ring, and sets " +
-                "Vibe only or your Custom mode for the alarm due next (held ${AlarmDayRules.SNOOZE_HOLD_MIN} min " +
-                "after an alarm with snooze, 1 min without). Needs the watch connected; alarms set on the watch itself are overwritten.",
+                "Vibe only or your Custom mode for the alarm due next. Snooze is done by the phone: the alarm " +
+                "rings again every few minutes until you stop it here or in the notification. " +
+                "Needs the watch connected; alarms set on the watch itself are overwritten.",
             fontSize = 13.sp,
             modifier = Modifier.padding(8.dp),
         )

@@ -26,11 +26,11 @@ Each alarm has:
 
 - a **label** (phone only — the watch has no alarm names)
 - **repeat**: *Once*, every day, Mon–Fri, weekends or any set of days
-- **Sound + vibe** or **Vibe only** — the watch has one sound mode for everything, so the alarm *borrows* it: five minutes before it rings the mode it needs is set, and after the ring (or the snooze) your own mode comes back
-- **snooze** on/off
-- **smart wake**: ring up to 15/30/45/60 minutes early, in light sleep (needs heart-rate monitoring *All day* or *Activities + night*, Sport tab)
+- **Sound + vibe** or **Vibe only** — the watch has one sound mode for everything, so the alarm *borrows* it: five minutes before it rings the mode it needs is set, and after the ring (or once its snooze is stopped) your own mode comes back
+- **snooze**: off by default; switched on, every 5/10/15/20/30 minutes (slider) until you stop it
+- **smart wake** (off by default; slider): ring up to 15/30/45/60 minutes early, in light sleep (needs heart-rate monitoring *All day* or *Activities + night*, Sport tab)
 
-A **one-time** alarm switches itself off after it has rung (and finished snoozing), and is set again for its next time when you switch it back on.
+A **one-time** alarm switches itself off after it has rung (and its snooze has been stopped), and is set again for its next time when you switch it back on.
 
 Hold an alarm and drag it to reorder the list; new alarms go to the top. Edits show instantly on the phone and reach the watch in the background (merged and queued, retried if the watch does not answer).
 
@@ -40,7 +40,7 @@ Hold an alarm and drag it to reorder the list; new alarms go to the top. Edits s
 
 **One editor for everything.** Tap *+ Add alarm* or any alarm card; all options are set before anything is sent, so the watch gets a single update.
 
-**Snooze you can stop from the phone.** On the DW-H5600 a button press while the alarm rings does not end the snooze — it repeats every 5 minutes for up to 40 minutes, and the only way to stop it on the watch is to switch the alarm off in its settings. So after an alarm with snooze rings, the phone shows a *snoozing until 8:50 — Stop snooze* notification (and a button on the card). Stopping cancels the snooze on the watch. The app also avoids its own time syncs and alarm rewrites during a snooze window — both cancel a running snooze on the watch.
+**A snooze that keeps going until you stop it.** The watch's own snooze is never used: it gives up after 7 repeats, cannot be stopped from the watch without switching the alarm off, and any time sync cancels it. Instead the phone snoozes: after an alarm with snooze rings, the phone moves its watch slot to the next repeat (ring + 5 min, + 10 min, … at the interval you picked) a minute after each ring, with no limit. A *8:10 · next 8:15 — Stop snooze* notification (and a button on the card) ends it; a button press on the watch only silences one ring. A smart alarm snoozes from its set time, and its snooze can already be stopped inside its window when it woke you early.
 
 <br clear="left">
 
@@ -78,7 +78,7 @@ The top line reads **`W:TT`**:
 
 - The current conditions come from [Open-Meteo](https://open-meteo.com) for the phone's location. They are fetched just after every quarter hour, when Open-Meteo publishes new values, and sent to the watch while it is connected.
 - How it works: the app solves for a latitude and longitude where today's sunrise falls at `W:TT` local time and the sunset falls at the real sunset where you are. It uses the same horizon angle the watch's own formula appears to use, measured against the watch, so the display lands on the right minute. If your watch is still a minute off, use the *Top line* and *Sunset* fine-tune buttons.
-- The watch only recalculates its sun times when its time is set, so each update is a location write plus a time sync. Updates pause while an alarm is snoozing, because a time sync would cancel the snooze.
+- The watch only recalculates its sun times when its time is set, so each update is a location write plus a time sync. Updates skip the minute an alarm rings, so a time sync never cuts a ring short.
 - Limits: temperatures below 0 °C show as `00`, and above 59 °C as `59`. The real sunrise is no longer shown (the *Real today* card in the app still shows it). With no connection or no internet, the watch keeps the last weather it received.
 
 #### Auto face (steps / sun)
@@ -161,9 +161,9 @@ Button tone and vibration, auto light, illumination period, power saving — eac
 
 The watch stays connected all day (the app repeats the official app's `0x39` handshake), and a scheduler on the phone does the watch's planning:
 
-- when an alarm time passes: reload the alarm slots, the smart slot and the sound mode, switch finished one-time alarms off
+- a minute after an alarm or a snooze repeat rings: reload the alarm slots (a snoozing alarm's slot moves to its next repeat), the smart slot and the sound mode, switch finished one-time alarms off
 - at the edges of the sunset window: switch the watch face
-- five minutes before an alarm and after it (or its snooze): switch the sound mode to what the alarm needs and back to yours
+- five minutes before an alarm and after it (or when its snooze is stopped): switch the sound mode to what the alarm needs and back to yours
 - at the start and end of the night: silence the watch, when *Silent at night* is on
 - every quarter hour: refresh the sun data or the weather (a location and time sync — the watch only recalculates its sun times on a time write)
 - on every connection: one location and time sync
@@ -196,7 +196,7 @@ Android 8 or later. **Switching from the official CASIO WATCHES app:** unpair on
 ## Known limits
 
 - The watch's alarm slots ring every day; the phone is what switches day-specific and one-time alarms on and off. If the watch is away from the phone for more than a day, they ring on the wrong days until it reconnects.
-- The watch does not report snooze state. The app assumes a snooze runs its full 40 minutes unless stopped from the phone; if you switch the alarm off on the watch instead, the notification stays until 40 minutes are up.
+- The snooze needs the phone: each repeat is written to the watch a minute after the previous ring. If the watch disconnects while an alarm is snoozing, it rings once more at the last repeat time written (and at that time daily) until it reconnects.
 - Battery bars beyond the levels you have calibrated are estimates.
 - Stopwatch laps cannot be read: the watch sends nothing about its stopwatch.
 - Step history starts with the first sync of this version; earlier days cannot be fetched again.

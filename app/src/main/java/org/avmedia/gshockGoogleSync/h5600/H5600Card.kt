@@ -361,7 +361,7 @@ private fun SoundNotificationsCard(vm: H5600ViewModel) {
         Column(modifier = Modifier.padding(12.dp)) {
             CardTitle("Sound & notifications", "Sound mode is the watch's own setting for all its sounds, and the " +
                 "mode you pick here is kept. An alarm borrows the watch: 5 min before it rings the mode it needs is " +
-                "set (Vibe only / Sound, chosen per alarm in the Alarms tab), and after the ring or its snooze your " +
+                "set (Vibe only / Sound, chosen per alarm in the Alarms tab), and after the ring, or once its snooze is stopped, your " +
                 "mode comes back.<br><br>Silent at night: the watch has no sound and no vibration from the start to " +
                 "the end of the night time (set on the Settings tab); alarms still ring.<br><br>Notifications only " +
                 "from chosen apps: when on, only the checked apps reach the watch; when off, every app's notifications do.")

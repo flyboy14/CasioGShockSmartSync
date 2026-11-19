@@ -73,8 +73,7 @@ class ActionRunner @Inject constructor(
         // No-op for other watches.
         h5600ScheduleRunner.onConnected(applySchedule = state.button != null)
 
-        // DW-H5600: the scheduler above already did the connect work (time sync — postponed while
-        // an alarm is snoozing, since a time sync cancels the snooze — and the alarm slots).
+        // DW-H5600: the scheduler above already did the connect work (time sync and the alarm slots).
         // The stock connect actions would sync the time again regardless, and their prayer alarms
         // would fight the phone-side alarm list; reminders are not supported on this watch.
         if (org.avmedia.gshockapi.WatchInfo.model == org.avmedia.gshockapi.WatchInfo.WatchModel.DW_H5600 &&

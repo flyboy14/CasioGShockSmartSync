@@ -6,8 +6,10 @@ import org.avmedia.gshockapi.model.SoundMode
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.DayOfWeek
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.util.UUID
 
 /**
@@ -20,34 +22,89 @@ import java.util.UUID
  */
 object AlarmPool {
     const val SLOTS = 4
-    /**
-     * How long an alarm still "governs" after its ring time (stays on the watch, keeps its sound
-     * mode, a one-time alarm stays on): the snooze repeats (up to 7 x 5 min) if snooze is on,
-     * otherwise just the ring itself.
-     */
-    fun holdMin(a: PhoneAlarm): Long = if (a.snooze) AlarmDayRules.SNOOZE_HOLD_MIN else RING_MIN
-    private const val RING_MIN = 1L
 
-    /** End of the hold after [ring]; a ring whose snooze was stopped from the phone ends at once. */
+    /** Snooze intervals on the alarm editor's slider (minutes), shown once snooze is switched on. */
+    val SNOOZE_CHOICES = listOf(5, 10, 15, 20, 30)
+    const val DEFAULT_SNOOZE_MIN = 5
+    /** Interval given to alarms that had the watch's own snooze on before the phone-side snooze. */
+    const val MIGRATED_SNOOZE_MIN = 5
+    private const val RING_MIN = 1L
+    /** End of a snooze that runs until stopped and has no later ring to end it (one-time alarm). */
+    private val FOREVER: LocalDateTime = LocalDateTime.MAX
+
+    /*
+     * Snooze is done by the phone, not the watch: the watch's own snooze is off on every slot (it
+     * stops after 7 repeats, and time syncs / slot writes cancel it). After an alarm with snooze
+     * rings, the phone moves its watch slot to the next repeat time — ring + X, ring + 2X, … — a
+     * minute after each ring, until the snooze is stopped from the phone (card or notification),
+     * the alarm is switched off or edited, or its next regular ring starts a new round.
+     */
+
+    /**
+     * The ring an alarm is on now: the last one that has started. A smart alarm starts at the
+     * beginning of its window (it may wake you any time in it), so its snooze can be stopped early.
+     */
+    private fun currentRing(a: PhoneAlarm, now: LocalDateTime): LocalDateTime? =
+        rings(a, now).lastOrNull { !start(a, it).isAfter(now) }
+
+    private fun start(a: PhoneAlarm, ring: LocalDateTime) = ring.minusMinutes(a.smartWindowMin.toLong())
+
+    /** True if [ring] snoozes: snooze on, the ring came after the alarm was last set, not stopped. */
+    private fun snoozesFrom(a: PhoneAlarm, ring: LocalDateTime): Boolean =
+        a.snoozes && ring != a.dismissedRing && (a.since == null || ring.isAfter(a.since))
+
+    /**
+     * End of an alarm's hold after [ring] (keeps its slot and its sound mode): with snooze, until
+     * stopped — at the latest when its next ring starts; otherwise the ring minute itself.
+     */
     fun holdEnd(a: PhoneAlarm, ring: LocalDateTime): LocalDateTime =
-        ring.plusMinutes(if (a.dismissedRing == ring) RING_MIN else holdMin(a))
+        if (snoozesFrom(a, ring)) rings(a, ring).firstOrNull { it.isAfter(ring) }?.let { start(a, it) } ?: FOREVER
+        else ring.plusMinutes(RING_MIN)
 
     private fun inHold(a: PhoneAlarm, now: LocalDateTime): Boolean =
-        lastRing(a, now)?.let { holdEnd(a, it).isAfter(now) } == true
+        currentRing(a, now)?.let { holdEnd(a, it).isAfter(now) } == true
+
+    /** The first repeat of [ring] (ring + k x interval, k ≥ 1) after [now]. */
+    private fun nextRepeat(a: PhoneAlarm, ring: LocalDateTime, now: LocalDateTime): LocalDateTime {
+        val x = a.snoozeMin.toLong()
+        val k = maxOf(1L, Math.floorDiv(Duration.between(ring, now).toMinutes(), x) + 1)
+        return ring.plusMinutes(k * x)
+    }
+
+    /** Alarms snoozing now, each with its next repeat time. */
+    fun snoozing(pool: List<PhoneAlarm>, now: LocalDateTime): List<Pair<PhoneAlarm, LocalDateTime>> =
+        pool.mapNotNull { a ->
+            currentRing(a, now)?.takeIf { snoozesFrom(a, it) && holdEnd(a, it).isAfter(now) }?.let { a to nextRepeat(a, it, now) }
+        }
 
     /**
-     * Alarms snoozing right now: snooze on, rang within the snooze window, not stopped from the
-     * phone. The watch does not report snooze state, but on the DW-H5600 a button press while it
-     * rings does not end the snooze — only the app does (or switching the alarm off on the watch,
-     * which nobody does half asleep) — so this is taken as fact.
-     * Their last ring time comes with them.
+     * True during the minute an alarm or a snooze repeat rings (a smart alarm only at its target
+     * time). Time syncs wait for it to pass: a write to the watch may silence a ringing alarm.
      */
-    fun snoozing(pool: List<PhoneAlarm>, now: LocalDateTime): List<Pair<PhoneAlarm, LocalDateTime>> =
-        pool.filter { it.snooze }.mapNotNull { a -> lastRing(a, now)?.takeIf { holdEnd(a, it).isAfter(now) }?.let { a to it } }
+    fun ringing(pool: List<PhoneAlarm>, now: LocalDateTime): Boolean = pool.any { a ->
+        val ring = currentRing(a, now)?.takeIf { !it.isAfter(now) } ?: return@any false
+        val last = if (snoozesFrom(a, ring) && holdEnd(a, ring).isAfter(now)) {
+            val x = a.snoozeMin.toLong()
+            ring.plusMinutes(Duration.between(ring, now).toMinutes() / x * x)
+        } else ring
+        now.isBefore(last.plusMinutes(RING_MIN))
+    }
 
-    /** Marks alarm [id]'s last ring as stopped (snooze cancelled on the watch). */
+    /** Stops alarm [id]'s snooze (marks its current ring as stopped). */
     fun dismiss(pool: List<PhoneAlarm>, id: String, now: LocalDateTime): List<PhoneAlarm> =
-        pool.map { a -> if (a.id == id) lastRing(a, now)?.let { a.copy(dismissedRing = it) } ?: a else a }
+        pool.map { a -> if (a.id == id) currentRing(a, now)?.let { a.copy(dismissedRing = it) } ?: a else a }
+
+    /**
+     * [edited] as saved from the editor or a switch: a change to when it rings (time, days, once,
+     * on/off) or turning snooze on sets [PhoneAlarm.since], so an earlier ring never starts
+     * snoozing (e.g. snooze switched on in the evening for an alarm that rang this morning).
+     * A new label or interval leaves a running snooze alone.
+     */
+    fun touch(old: PhoneAlarm?, edited: PhoneAlarm, now: LocalDateTime): PhoneAlarm {
+        val changed = old == null || old.hour != edited.hour || old.minute != edited.minute || old.days != edited.days ||
+            old.once != edited.once || old.enabled != edited.enabled || old.snoozes != edited.snoozes
+        return if (changed) edited.copy(since = now) else edited
+    }
 
     data class PhoneAlarm(
         val id: String = UUID.randomUUID().toString(),
@@ -57,7 +114,8 @@ object AlarmPool {
         val days: Set<DayOfWeek> = AlarmDayRules.ALL_DAYS,
         val vibeOnly: Boolean = false,
         val label: String = "", // phone-side only; the watch has no alarm names
-        val snooze: Boolean = true,
+        /** Phone-side snooze: 0 = off, else rings again every this many minutes until stopped. */
+        val snoozeMin: Int = 0,
         /** 0 = normal alarm; 15/30/45/60 = smart alarm waking up to that many minutes earlier. */
         val smartWindowMin: Int = 0,
         /** One-time alarm: rings once on [onceDate] (ignores [days]), then switches itself off. */
@@ -66,8 +124,11 @@ object AlarmPool {
         val onceDate: LocalDate? = null,
         /** Ring whose snooze was stopped from the phone ([dismiss]): its hold ends right away. */
         val dismissedRing: LocalDateTime? = null,
+        /** When it was last set ([touch]): rings before this never snooze. Null = no limit. */
+        val since: LocalDateTime? = null,
     ) {
         val isSmart: Boolean get() = smartWindowMin > 0
+        val snoozes: Boolean get() = snoozeMin > 0
         val minuteOfDay: Int get() = hour * 60 + minute
     }
 
@@ -84,8 +145,10 @@ object AlarmPool {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_SMART_LOADED, id).apply()
     }
 
-    fun load(context: Context): List<PhoneAlarm>? =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_POOL, null)?.let { json ->
+    fun load(context: Context): List<PhoneAlarm>? {
+        var migrated = false
+        val now = LocalDateTime.now()
+        val pool = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_POOL, null)?.let { json ->
             runCatching {
                 val arr = JSONArray(json)
                 (0 until arr.length()).map { i ->
@@ -99,17 +162,27 @@ object AlarmPool {
                             .toSet().ifEmpty { AlarmDayRules.ALL_DAYS },
                         vibeOnly = o.optBoolean("vibeOnly", false),
                         label = o.optString("label", ""),
-                        snooze = o.optBoolean("snooze", true),
+                        // Before the phone-side snooze: the watch's snooze on/off.
+                        snoozeMin = if (o.has("snoozeMin")) o.getInt("snoozeMin")
+                            else if (o.optBoolean("snooze", true)) MIGRATED_SNOOZE_MIN else 0,
                         smartWindowMin = o.optInt("smartWindowMin", 0),
                         once = o.optBoolean("once", false),
                         onceDate = o.optString("onceDate", "").takeIf { it.isNotEmpty() }
                             ?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
                         dismissedRing = o.optString("dismissedRing", "").takeIf { it.isNotEmpty() }
                             ?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() },
+                        // Missing (saved before the phone-side snooze): from now, so rings already
+                        // past do not start snoozing on the update.
+                        since = o.optString("since", "").takeIf { it.isNotEmpty() }
+                            ?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() }
+                            ?: now.also { migrated = true },
                     )
                 }
             }.getOrNull()
         }
+        if (migrated && pool != null) save(context, pool)
+        return pool
+    }
 
     fun save(context: Context, alarms: List<PhoneAlarm>) {
         val arr = JSONArray()
@@ -120,11 +193,12 @@ object AlarmPool {
                     .put("days", a.days.sorted().joinToString(",") { it.value.toString() })
                     .put("vibeOnly", a.vibeOnly)
                     .put("label", a.label)
-                    .put("snooze", a.snooze)
+                    .put("snoozeMin", a.snoozeMin)
                     .put("smartWindowMin", a.smartWindowMin)
                     .put("once", a.once)
                     .put("onceDate", a.onceDate?.toString() ?: "")
-                    .put("dismissedRing", a.dismissedRing?.toString() ?: ""),
+                    .put("dismissedRing", a.dismissedRing?.toString() ?: "")
+                    .put("since", a.since?.toString() ?: ""),
             )
         }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_POOL, arr.toString()).apply()
@@ -140,11 +214,12 @@ object AlarmPool {
     }
 
     /** First use: take over the watch's current alarms, with any per-alarm settings made earlier. */
-    fun importFrom(watch: List<Alarm>, rules: Map<Int, Set<DayOfWeek>>, vibe: Set<Int>): List<PhoneAlarm> =
+    fun importFrom(watch: List<Alarm>, rules: Map<Int, Set<DayOfWeek>>, vibe: Set<Int>, now: LocalDateTime): List<PhoneAlarm> =
         watch.take(SLOTS).map { a ->
             val m = a.hour * 60 + a.minute
             PhoneAlarm(hour = a.hour, minute = a.minute, enabled = a.enabled,
-                days = rules[m] ?: AlarmDayRules.ALL_DAYS, vibeOnly = m in vibe)
+                days = rules[m] ?: AlarmDayRules.ALL_DAYS, vibeOnly = m in vibe,
+                snoozeMin = if (a.snooze == true) MIGRATED_SNOOZE_MIN else 0, since = now)
         }
 
     // ---- pure planning ----
@@ -168,8 +243,8 @@ object AlarmPool {
     }
 
     /**
-     * One-time alarms whose ring is over (rang more than [holdMin] minutes ago, so snooze is done)
-     * are switched off. Returns the list unchanged if none expired.
+     * One-time alarms whose ring is over (rang, and its snooze, if any, was stopped) are switched
+     * off. Returns the list unchanged if none expired.
      */
     fun expireOnce(pool: List<PhoneAlarm>, now: LocalDateTime): List<PhoneAlarm> =
         pool.map { a ->
@@ -178,25 +253,21 @@ object AlarmPool {
         }
 
     fun nextRing(a: PhoneAlarm, now: LocalDateTime): LocalDateTime? = rings(a, now).firstOrNull { it.isAfter(now) }
-    private fun lastRing(a: PhoneAlarm, now: LocalDateTime): LocalDateTime? = rings(a, now).lastOrNull { !it.isAfter(now) }
 
     /**
-     * Which alarm goes in which watch slot. Keeps alarms in the slot they already occupy (so a
-     * ringing / snoozing slot is not rewritten), keeps alarms that rang in the last [holdMin]
-     * minutes (snooze), then fills free slots with the alarms due soonest within 24 h.
+     * Which alarm goes in which watch slot. Keeps alarms in the slot they already occupy, keeps
+     * alarms that are ringing or snoozing (a snoozing smart alarm too: its repeats use a normal
+     * slot), then fills free slots with the alarms due soonest within 24 h.
      */
     fun plan(allAlarms: List<PhoneAlarm>, current: List<String?>, now: LocalDateTime): List<String?> {
-        val pool = allAlarms.filterNot { it.isSmart } // smart alarms use the watch's single smart slot
-        val byId = pool.associateBy { it.id }
-        val dueSoon = pool.mapNotNull { a -> nextRing(a, now)?.let { a to it } }
+        val held = allAlarms.filter { a -> inHold(a, now) && (!a.isSmart || snoozing(listOf(a), now).isNotEmpty()) }.map { it.id }
+        val dueSoon = allAlarms.filterNot { it.isSmart } // smart alarms use the watch's single smart slot
+            .mapNotNull { a -> nextRing(a, now)?.let { a to it } }
             .filter { (_, t) -> t.isBefore(now.plusHours(24)) }
             .sortedBy { it.second }.map { it.first.id }
-        val snoozing = pool.filter { a ->
-            inHold(a, now)
-        }.map { it.id }
-        val wanted = (snoozing + dueSoon).distinct().take(SLOTS)
+        val wanted = (held + dueSoon).distinct().take(SLOTS)
 
-        val slots = MutableList<String?>(SLOTS) { i -> current.getOrNull(i)?.takeIf { it in wanted && it in byId } }
+        val slots = MutableList<String?>(SLOTS) { i -> current.getOrNull(i)?.takeIf { it in wanted } }
         wanted.filter { it !in slots }.forEach { id ->
             val free = slots.indexOfFirst { it == null }
             if (free >= 0) slots[free] = id
@@ -205,18 +276,36 @@ object AlarmPool {
     }
 
     /**
-     * Which alarm goes into the watch's single smart-alarm slot: one that rang within the snooze
-     * hold keeps it, otherwise the next smart alarm due within 24 h (none -> slot off).
+     * Time a loaded alarm's watch slot is set to: its next snooze repeat while snoozing (unless its
+     * regular ring comes first), otherwise its own time.
      */
-    fun planSmart(all: List<PhoneAlarm>, current: String?, now: LocalDateTime): String? {
-        val smart = all.filter { it.isSmart }
-        val snoozing = smart.filter { a -> inHold(a, now) }
-        snoozing.firstOrNull { it.id == current }?.let { return it.id }
-        snoozing.firstOrNull()?.let { return it.id }
-        return smart.mapNotNull { a -> nextRing(a, now)?.let { a to it } }
+    fun slotTime(a: PhoneAlarm, now: LocalDateTime): LocalTime {
+        val repeat = currentRing(a, now)?.takeIf { snoozesFrom(a, it) && holdEnd(a, it).isAfter(now) }?.let { nextRepeat(a, it, now) }
+        val regular = if (a.isSmart) null else nextRing(a, now)
+        return listOfNotNull(repeat, regular).minOrNull()?.toLocalTime() ?: LocalTime.of(a.hour, a.minute)
+    }
+
+    /**
+     * Which alarm goes into the watch's single smart-alarm slot: the next smart alarm due within
+     * 24 h whose snooze was not already stopped in its window (none -> slot off).
+     */
+    fun planSmart(all: List<PhoneAlarm>, now: LocalDateTime): String? =
+        all.filter { it.isSmart }
+            .mapNotNull { a -> nextRing(a, now)?.takeIf { it != a.dismissedRing }?.let { a to it } }
             .filter { (_, t) -> t.isBefore(now.plusHours(24)) }
             .minByOrNull { it.second }?.first?.id
-    }
+
+    /**
+     * Next time the slots must be re-planned: a minute after every ring and every snooze repeat
+     * (the slot then gets the next repeat; the ring itself is over by then, so the write does not
+     * cut it short — hence no 1-min interval), and the start of each smart window (its snooze can
+     * be stopped from then on).
+     */
+    fun nextBoundary(pool: List<PhoneAlarm>, now: LocalDateTime): LocalDateTime? =
+        (pool.flatMap { a -> rings(a, now).flatMap { listOfNotNull(it.plusMinutes(RING_MIN), if (a.isSmart) start(a, it) else null) } } +
+            snoozing(pool, now).map { (_, next) -> next.plusMinutes(RING_MIN) })
+            .filter { it.isAfter(now) }
+            .minOrNull()
 
     /** True if the watch already has what [wanted] asks for, in the fields the app manages. */
     fun sameOnWatch(wanted: List<Alarm>, watch: List<Alarm>): Boolean =
@@ -225,13 +314,18 @@ object AlarmPool {
                 (x.snooze == null || w.snooze == null || x.snooze == w.snooze)))
         }
 
-    /** Watch alarm list for a plan: loaded slots enabled at their time, other slots disabled. */
-    fun toWatchAlarms(plan: List<String?>, pool: List<PhoneAlarm>, watch: List<Alarm>): List<Alarm> {
+    /**
+     * Watch alarm list for a plan: loaded slots enabled at their [slotTime], with the watch's own
+     * snooze off (the phone snoozes); other slots disabled.
+     */
+    fun toWatchAlarms(plan: List<String?>, pool: List<PhoneAlarm>, watch: List<Alarm>, now: LocalDateTime): List<Alarm> {
         val byId = pool.associateBy { it.id }
         return watch.mapIndexed { i, w ->
             if (i >= SLOTS) w // slots beyond the usable four are left as they are
-            else byId[plan.getOrNull(i)]?.let { a -> w.copy(hour = a.hour, minute = a.minute, enabled = true, oneTime = false, snooze = a.snooze) }
-                ?: w.copy(enabled = false)
+            else byId[plan.getOrNull(i)]?.let { a ->
+                val t = slotTime(a, now)
+                w.copy(hour = t.hour, minute = t.minute, enabled = true, oneTime = false, snooze = false)
+            } ?: w.copy(enabled = false)
         }
     }
 
@@ -240,8 +334,8 @@ object AlarmPool {
 
     /**
      * When an alarm "borrows" the watch's sound mode for one ring: from [PRE_ALARM_MIN] minutes
-     * before it can ring (before its smart window) until its hold ends (1 min, or the snooze window,
-     * or right away once the snooze is stopped from the phone).
+     * before it can ring (before its smart window) until its hold ends (1 min, or until its snooze
+     * is stopped from the phone).
      */
     fun soundWindow(a: PhoneAlarm, ring: LocalDateTime): Pair<LocalDateTime, LocalDateTime> =
         ring.minusMinutes(a.smartWindowMin + PRE_ALARM_MIN) to holdEnd(a, ring)
@@ -287,6 +381,6 @@ object AlarmPool {
     /** Start and end of every alarm's [soundWindow] ahead of [now] (scheduler wake-ups). */
     fun nextSoundBoundary(pool: List<PhoneAlarm>, now: LocalDateTime): LocalDateTime? =
         pool.flatMap { a -> rings(a, now).flatMap { soundWindow(a, it).toList() } }
-            .filter { it.isAfter(now) }
+            .filter { it.isAfter(now) && it != FOREVER }
             .minOrNull()
 }

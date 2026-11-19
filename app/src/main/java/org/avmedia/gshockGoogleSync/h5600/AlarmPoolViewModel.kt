@@ -58,7 +58,7 @@ class H5600AlarmPoolViewModel @Inject constructor(
         val onWatch: Set<String> = emptySet(),
         val onWatchSmart: String? = null,
         val lastApplied: String? = null,
-        /** Alarms snoozing on the watch right now (offer "Stop snooze"). */
+        /** Alarms snoozing right now (phone-side snooze; offer "Stop snooze"). */
         val snoozing: Set<String> = emptySet(),
     )
 
@@ -82,7 +82,7 @@ class H5600AlarmPoolViewModel @Inject constructor(
         )
     }
 
-    /** Cancels the snooze on the watch (time sync) and ends the alarm's hold — in the background. */
+    /** Stops the phone-side snooze and puts the alarm's slot back — in the background. */
     fun stopSnooze(id: String) {
         _state.update { it.copy(snoozing = it.snoozing - id) } // the button goes away at once
         SnoozeNotifier.cancel(context, id)
@@ -92,7 +92,7 @@ class H5600AlarmPoolViewModel @Inject constructor(
     /** First use: the list starts with the watch's current alarms and earlier per-alarm settings. */
     private fun importFromWatch() = work("import alarms") {
         val watch = api.getAlarms()
-        AlarmPool.save(context, AlarmPool.importFrom(watch, AlarmDayRules.load(context), AlarmDayRules.loadVibeOnly(context)))
+        AlarmPool.save(context, AlarmPool.importFrom(watch, AlarmDayRules.load(context), AlarmDayRules.loadVibeOnly(context), java.time.LocalDateTime.now()))
         reload()
         runner.requestApplyAlarms()
     }
@@ -108,7 +108,10 @@ class H5600AlarmPoolViewModel @Inject constructor(
     }
 
     /** New alarm from the editor, with all its options: one watch update. */
-    fun add(a: PhoneAlarm) = change { listOf(AlarmPool.arm(a, java.time.LocalDateTime.now())) + it } // new alarms go to the top
+    fun add(a: PhoneAlarm) = change { // new alarms go to the top
+        val now = java.time.LocalDateTime.now()
+        listOf(AlarmPool.arm(AlarmPool.touch(null, a, now), now)) + it
+    }
     fun delete(id: String) = change { list -> list.filterNot { it.id == id } }
 
     /** Hold-and-drag on the Alarms tab: only the order on the phone changes, nothing is sent. */
@@ -126,13 +129,18 @@ class H5600AlarmPoolViewModel @Inject constructor(
      * comes round — editing it means you want it to ring.
      */
     fun update(a: PhoneAlarm) = change { list ->
+        val now = java.time.LocalDateTime.now()
         val saved = if (a.once) a.copy(enabled = true) else a
-        list.map { if (it.id == a.id) AlarmPool.arm(saved, java.time.LocalDateTime.now()) else it }
+        list.map { if (it.id == a.id) AlarmPool.arm(AlarmPool.touch(it, saved, now), now) else it }
     }
 
     /** Card switch; switching a one-time alarm back on sets it for its next hh:mm. */
     fun setEnabled(a: PhoneAlarm, on: Boolean) = change { list ->
-        list.map { if (it.id != a.id) it else if (on) AlarmPool.arm(it.copy(enabled = true), java.time.LocalDateTime.now()) else it.copy(enabled = false) }
+        val now = java.time.LocalDateTime.now()
+        list.map {
+            if (it.id != a.id) it
+            else AlarmPool.touch(it, if (on) AlarmPool.arm(it.copy(enabled = true), now) else it.copy(enabled = false), now)
+        }
     }
 
     init {
