@@ -78,7 +78,7 @@ object H5600Steps {
     private const val KEY_SLOTS = "h5600_step_slots" // {"<epoch minute UTC>": steps}
     private const val KEY_DAYS = "h5600_step_days"   // {"yyyy-MM-dd": steps}
     private const val KEEP_DAYS = 8L
-    const val HISTORY_DAYS = 6
+    const val HISTORY_DAYS = 30 // past days kept for the Daily chart (it shows this month: the 1st to today)
     private const val KEEP_DAYS_HISTORY = 400L // daily totals, for the Monthly chart
     const val MONTHS = 6
 
@@ -105,9 +105,29 @@ object H5600Steps {
     private fun saveMap(context: android.content.Context, key: String, map: Map<String, Int>) =
         H5600Prefs.get(context).edit().putString(key, org.json.JSONObject(map as Map<*, *>).toString()).apply()
 
+    /**
+     * Saves the frames the app does not decode yet (sleep and others) as hex, one JSON file per
+     * sync in files/lifelog/ (kept 60 days): the watch never sends them again.
+     * Read with: adb shell run-as org.avmedia.gshockGoogleSync ls files/lifelog
+     */
+    private fun keepRawFrames(context: android.content.Context, r: H5600LifeLog.Result) {
+        val keep = r.frames.filterKeys { it !in setOf(0x50, 0x51, 0x63) && it != 0x00 }
+        if (keep.isEmpty()) return
+        runCatching {
+            val dir = java.io.File(context.filesDir, "lifelog").apply { mkdirs() }
+            val json = org.json.JSONObject().put("headerUtc", r.headerTimeUtc.toString())
+                .put("savedAt", java.time.ZonedDateTime.now().toString())
+            keep.forEach { (t, b) -> json.put("%02X".format(t), b.joinToString("") { "%02x".format(it) }) }
+            java.io.File(dir, "frames-" + System.currentTimeMillis() + ".json").writeText(json.toString(1))
+            val old = System.currentTimeMillis() - 60L * 24 * 3600 * 1000
+            dir.listFiles()?.filter { it.lastModified() < old }?.forEach { it.delete() }
+        }.onFailure { timber.log.Timber.e(it, "LifeLog raw frames not saved") }
+    }
+
     /** Stores this sync's slots and days, then builds today's data with hourly bars and past days from the store. */
     fun merge(context: android.content.Context, r: H5600LifeLog.Result, zone: ZoneId): StepCounterData {
         val base = toStepCounterData(r, zone)
+        keepRawFrames(context, r)
         val today = base.timestamp?.toLocalDate() ?: java.time.LocalDate.now(zone)
         val cutoff = r.headerTimeUtc.minusDays(KEEP_DAYS).toEpochSecond(ZoneOffset.UTC) / 60
 

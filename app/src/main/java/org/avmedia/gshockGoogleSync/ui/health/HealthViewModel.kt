@@ -52,6 +52,12 @@ internal fun resolveDistanceKm(stepData: StepCounterData, strideMeters: Float = 
     return (steps * strideMeters) / 1000f
 }
 
+/** Distance for a step count (same stride as the Today ring). */
+internal fun stepsKm(steps: Int, strideMeters: Float = 0.73f): Float = steps * strideMeters / 1000f
+
+/** Calories for a step count (same formula as the Today ring: km x kg x 1.036). */
+internal fun stepsKcal(steps: Int, weightKg: Int): Float = stepsKm(steps) * weightKg * 1.036f
+
 internal fun hasNoStepData(stepData: StepCounterData): Boolean =
     stepData.currentDaySteps == null &&
             stepData.distanceMeters == null &&
