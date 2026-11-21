@@ -25,17 +25,11 @@ import kotlin.math.sin
  */
 object TempSun {
     const val MAX_TEMP = 59
-    /** Open-Meteo "current" values are 15-minute data (interval 900 s); fetch once per quarter. */
-    const val REFRESH_MIN = 15L
+    /** Fetched hourly, not overnight (Open-Meteo has quarter-hour data; see [SyncPacing]). */
+    const val REFRESH_MIN = SyncPacing.PERIODIC_MIN
 
-    /**
-     * Next fetch time: 1 minute after the next quarter hour (Open-Meteo publishes at :00/:15/:30/:45),
-     * so each fetch picks up a new value. Pure.
-     */
-    fun nextFetch(now: LocalDateTime): LocalDateTime {
-        val q = now.withSecond(0).withNano(0).withMinute((now.minute / 15) * 15).plusMinutes(1)
-        return if (q.isAfter(now)) q else q.plusMinutes(15)
-    }
+    /** Next fetch time: [SyncPacing.nextPeriodic]. Pure. */
+    fun nextFetch(now: LocalDateTime): LocalDateTime = SyncPacing.nextPeriodic(now)
 
     private const val PREFS = org.avmedia.gshockGoogleSync.h5600.H5600Prefs.NAME
     private const val KEY_ENABLED = "temp_sun_enabled"
@@ -147,7 +141,7 @@ object TempSun {
         if (lastCategory(context) == null) return true
         val (_, at) = last(context) ?: return true
         val fetchedAt = LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(at), ZoneId.systemDefault())
-        return !LocalDateTime.now().isBefore(nextFetch(fetchedAt)) // a newer quarter-hour value exists
+        return !LocalDateTime.now().isBefore(nextFetch(fetchedAt)) // the next hourly fetch is due
     }
 
     /**

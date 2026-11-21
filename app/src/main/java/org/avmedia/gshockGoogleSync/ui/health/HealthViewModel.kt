@@ -246,7 +246,7 @@ class HealthViewModel @Inject constructor(
             else -> api.getStepCount()
         }
 
-    /** DW-H5600: LifeLog sync (slow), cached for 15 min so the 5-min poll does not re-sync each time. */
+    /** DW-H5600: LifeLog sync (slow), cached for an hour so the 5-min poll does not re-sync each time. */
     private suspend fun fetchH5600Steps(): StepCounterData {
         org.avmedia.gshockGoogleSync.h5600.H5600Steps.cached()?.let { return it }
         val result = api.getH5600LifeLog() ?: return StepCounterData.unavailable()
@@ -292,7 +292,7 @@ class HealthViewModel @Inject constructor(
                     else null
 
                     _state.update { current ->
-                        // DW-H5600 data may come from the 15-min cache: show the real sync time.
+                        // DW-H5600 data may come from the hourly cache: show the real sync time.
                         val syncedAt = org.avmedia.gshockGoogleSync.h5600.H5600Steps.syncedAtMillis()
                             ?.takeIf { api.isH5600SettingsSupported() }
                             ?.let { java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneId.systemDefault()) }
@@ -316,7 +316,9 @@ class HealthViewModel @Inject constructor(
         stepPollJob = viewModelScope.launch {
             while (isActive) {
                 delay(STEP_POLL_INTERVAL)
-                if (watchFeatureManager.isFeatureSupported(FEATURE_STEP_COUNTER)) {
+                // Battery: no background LifeLog syncs in the quiet hours (pull-to-refresh still works).
+                val quiet = org.avmedia.gshockGoogleSync.h5600.SyncPacing.isQuiet(java.time.LocalDateTime.now())
+                if (!quiet && watchFeatureManager.isFeatureSupported(FEATURE_STEP_COUNTER)) {
                     requestStepRefresh()
                 }
             }

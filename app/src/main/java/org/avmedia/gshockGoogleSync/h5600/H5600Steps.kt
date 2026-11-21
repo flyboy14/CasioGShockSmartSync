@@ -8,7 +8,7 @@ import java.time.ZoneOffset
 
 /** Maps a DW-H5600 LifeLog result onto the Health tab's StepCounterData, with a short-lived cache. */
 object H5600Steps {
-    private const val CACHE_MS = 15 * 60_000L
+    private const val CACHE_MS = SyncPacing.PERIODIC_MIN * 60_000L // battery: hourly LifeLog syncs
 
     @Volatile
     private var cache: Pair<Long, StepCounterData>? = null

@@ -269,11 +269,11 @@ private fun SunWeatherCard(vm: H5600ViewModel) {
         Column(modifier = Modifier.padding(12.dp)) {
             CardTitle("Sun & weather", "Weather instead of sunrise: the sun screen's top line shows W:TT, " +
                 "W = 1 sunny, 2 cloudy, 3 rain/snow, 4 extreme (heavy rain, storm, gusts ≥ 60 km/h); TT = °C (0–59). " +
-                "E.g. 1:18 = sunny 18 °C. Sunset stays real. Updates every ${TempSun.REFRESH_MIN} min while connected.<br><br>" +
+                "E.g. 1:18 = sunny 18 °C. Sunset stays real. Updates hourly while connected, not from 00:00 to 06:00 (saves the watch's battery).<br><br>" +
                 "Real today and Weather now are the real values for the phone's location (Open-Meteo); " +
                 "Watch should show is what the watch's sun screen should read now.<br><br>" +
                 "Refresh fetches the weather now and sends location and time to the watch (the app also does " +
-                "this every ${TempSun.REFRESH_MIN} min and on every connection).<br><br>" +
+                "this hourly and on every connection).<br><br>" +
                 "Fine-tune: if the top line is 1 min too low, press + on top; if sunset is 1 min late, press − on sunset.<br><br>" +
                 "Sun at home (Auto face only): while the phone is on one of your home Wi-Fi networks, Auto shows Sun data " +
                 "all day; away from them, the steps / sunset logic applies. It switches the moment the Wi-Fi connects or " +

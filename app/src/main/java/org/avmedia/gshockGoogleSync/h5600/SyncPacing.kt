@@ -1,0 +1,35 @@
+package org.avmedia.gshockGoogleSync.h5600
+
+import java.time.LocalDateTime
+import java.time.LocalTime
+
+/**
+ * How often the phone talks to the watch on its own. Every sync wakes the watch's radio, and the
+ * battery went from full to half in 2-3 days at quarter-hour syncs, so periodic work is hourly and
+ * stops overnight. Alarm writes, snooze repeats and syncs on connect are not paced.
+ */
+object SyncPacing {
+    /** Weather / sun-data refresh and step sync interval. */
+    const val PERIODIC_MIN = 60L
+
+    /** No periodic syncs from [QUIET_START] (inclusive) to [QUIET_END] (exclusive). */
+    val QUIET_START: LocalTime = LocalTime.MIDNIGHT
+    val QUIET_END: LocalTime = LocalTime.of(6, 0)
+
+    fun isQuiet(now: LocalDateTime): Boolean {
+        val t = now.toLocalTime()
+        return !t.isBefore(QUIET_START) && t.isBefore(QUIET_END)
+    }
+
+    /**
+     * Next periodic sync: 1 minute past the next full hour (Open-Meteo publishes on the quarter
+     * hours, so :01 picks up a fresh value), moved to [QUIET_END] + 1 min if that falls in the
+     * quiet hours. Pure.
+     */
+    fun nextPeriodic(now: LocalDateTime): LocalDateTime {
+        var next = now.withMinute(1).withSecond(0).withNano(0)
+        if (!next.isAfter(now)) next = next.plusHours(1)
+        if (isQuiet(next)) next = next.with(QUIET_END).plusMinutes(1)
+        return next
+    }
+}

@@ -34,7 +34,7 @@ import javax.inject.Singleton
  *    watch's single sound mode for the alarm due next, switches finished one-time alarms off, and
  *    snoozes: moves a snoozing alarm's slot to its next repeat a minute after each ring, until the
  *    snooze is stopped from the phone (the watch's own snooze is never used);
- *  - sun data: a loc/time sync on connect and every quarter hour (weather trick: [TempSun]);
+ *  - sun data: a loc/time sync on connect and hourly, not overnight ([SyncPacing]) (weather trick: [TempSun]);
  *  - dynamic watch face ([SunFace]) at the edges of the sunset window.
  * Runs once when the watch connects (before the regular connection actions) and, while it stays
  * connected, each part only when it is due.
@@ -227,8 +227,8 @@ class H5600ScheduleRunner @Inject constructor(
 
     /**
      * The watch sometimes drops its sun location on its own (seen 2026-11-16: dashes with no write
-     * from us). With the weather option off nothing else re-sends it, so do a loc/time sync every
-     * quarter hour (the weather option does the same via its 15-min fetch).
+     * from us). With the weather option off nothing else re-sends it, so do a loc/time sync hourly
+     * outside the quiet hours (the weather option does the same via its hourly fetch).
      */
     private suspend fun resendSunIfDue(): String? {
         if (TempSun.isEnabled(context) || !api.isH5600SettingsSupported()) return null
@@ -243,7 +243,7 @@ class H5600ScheduleRunner @Inject constructor(
         watchCall("0x39 handshake") { withTimeout(15_000) { api.h5600ConnectionHandshake() } }
         // Smart Sync's connect routine rewrites the home / world-city packets (1D/1E/1F), which makes
         // the watch drop its sun location -> dashes. One loc/time sync per connection fixes it, and
-        // also counts as this quarter's sun re-send. (A time sync would cancel the watch's own
+        // also counts as this hour's sun re-send. (A time sync would cancel the watch's own
         // snooze, but the phone does the snoozing, so syncs never have to wait.)
         // Weather due as well? Fetch it first, so this one sync carries it — instead of a second
         // full time sync from the weather refresh a few seconds later.
@@ -389,10 +389,11 @@ class H5600ScheduleRunner @Inject constructor(
         return ok != null
     }
 
-    /** Quarter-hourly: weather fetch (option on) or plain sun-data re-send (option off). */
+    /** Hourly, not overnight: weather fetch (option on) or plain sun-data re-send (option off). */
     private suspend fun applyPeriodicLocked(notes: MutableList<String>) {
         // Not while an alarm or a snooze repeat rings; the pass a minute later catches up.
         if (AlarmPool.load(context)?.let { AlarmPool.ringing(it, LocalDateTime.now()) } == true) return
+        if (SyncPacing.isQuiet(LocalDateTime.now())) return // battery: nothing periodic overnight
         refreshTempSunLocked(force = false)?.let { notes += it }
         resendSunIfDue()?.let { notes += it }
     }
@@ -442,8 +443,8 @@ class H5600ScheduleRunner @Inject constructor(
 
     /**
      * For a Ready session: while connected, run each part only when it is due — alarms at alarm
-     * boundaries, the face at sunset-window edges, the sun/weather refresh every quarter hour —
-     * instead of re-reading everything every 15 minutes.
+     * boundaries, the face at sunset-window edges, the sun/weather refresh hourly (not overnight) —
+     * instead of re-reading everything on a fixed timer.
      */
     suspend fun applyAtBoundariesWhileConnected(session: Session) = coroutineScope {
         val ready = session.state.first { it.phase is SessionPhase.Ready || it.phase is SessionPhase.Closed }

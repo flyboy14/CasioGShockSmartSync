@@ -178,7 +178,7 @@ for alarms, the face in Auto, the sun data / weather. The rule for all of them:
   and it gives up after 7 repeats). A snoozing alarm's slot is rewritten to its next repeat a
   minute after each ring (`AlarmPool.slotTime`), until the phone stops it (`AlarmPool.dismiss`,
   `SnoozeNotifier`). Never write to the watch during a ring minute (`AlarmPool.ringing`): the
-  quarter-hour sync skips it, and slot writes happen a minute after a ring (so an interval must
+  hourly sync skips it, and slot writes happen a minute after a ring (so an interval must
   be at least 2 min; the editor offers 5–30).
 - A user change that affects the timetable (alarm edit, night time, DND switch) calls
   `runner.applyAlarms()` so the watch is updated at once and the next wake-up is re-planned.

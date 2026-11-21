@@ -2,6 +2,8 @@ package org.avmedia.gshockGoogleSync
 
 import org.avmedia.gshockGoogleSync.h5600.TempSun
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNotNull
 import org.junit.Test
 import java.time.Duration
@@ -86,10 +88,18 @@ class TempSunTest {
 
     @Test fun fetchesJustAfterEachQuarterHour() {
         val t = { h: Int, m: Int -> java.time.LocalDateTime.of(2026, 11, 16, h, m) }
-        assertEquals(t(21, 16), TempSun.nextFetch(t(21, 2)))
+        // hourly at :01, nothing from 00:00 to 06:00
+        assertEquals(t(22, 1), TempSun.nextFetch(t(21, 2)))
         assertEquals(t(21, 1), TempSun.nextFetch(t(21, 0)))
-        assertEquals(t(21, 16), TempSun.nextFetch(t(21, 1)))
+        assertEquals(t(22, 1), TempSun.nextFetch(t(21, 1)))
         assertEquals(t(22, 1), TempSun.nextFetch(t(21, 59)))
+        assertEquals(t(6, 1), TempSun.nextFetch(t(23, 1)).toLocalTime().let { t(it.hour, it.minute) })
+        assertEquals(t(6, 1), TempSun.nextFetch(t(3, 30)))
+        assertEquals(t(7, 1), TempSun.nextFetch(t(6, 1)))
+        assertTrue(org.avmedia.gshockGoogleSync.h5600.SyncPacing.isQuiet(t(0, 0)))
+        assertTrue(org.avmedia.gshockGoogleSync.h5600.SyncPacing.isQuiet(t(5, 59)))
+        assertFalse(org.avmedia.gshockGoogleSync.h5600.SyncPacing.isQuiet(t(6, 0)))
+        assertFalse(org.avmedia.gshockGoogleSync.h5600.SyncPacing.isQuiet(t(23, 59)))
     }
 
     @Test fun categoryFromCodeAndAmounts() {

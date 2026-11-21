@@ -76,7 +76,7 @@ The top line reads **`W:TT`**:
 
 `TT` is the outdoor temperature in °C. So `1:18` is sunny and 18 °C, `3:07` is rain and 7 °C.
 
-- The current conditions come from [Open-Meteo](https://open-meteo.com) for the phone's location. They are fetched just after every quarter hour, when Open-Meteo publishes new values, and sent to the watch while it is connected.
+- The current conditions come from [Open-Meteo](https://open-meteo.com) for the phone's location. They are fetched at one minute past every hour (not from 00:00 to 06:00) and sent to the watch while it is connected. Every sync wakes the watch's radio, so the app keeps them hourly to save its battery.
 - How it works: the app solves for a latitude and longitude where today's sunrise falls at `W:TT` local time and the sunset falls at the real sunset where you are. It uses the same horizon angle the watch's own formula appears to use, measured against the watch, so the display lands on the right minute. If your watch is still a minute off, use the *Top line* and *Sunset* fine-tune buttons.
 - The watch only recalculates its sun times when its time is set, so each update is a location write plus a time sync. Updates skip the minute an alarm rings, so a time sync never cuts a ring short.
 - Limits: temperatures below 0 °C show as `00`, and above 59 °C as `59`. The real sunrise is no longer shown (the *Real today* card in the app still shows it). With no connection or no internet, the watch keeps the last weather it received.
@@ -165,7 +165,7 @@ The watch stays connected all day (the app repeats the official app's `0x39` han
 - at the edges of the sunset window: switch the watch face
 - five minutes before an alarm and after it (or when its snooze is stopped): switch the sound mode to what the alarm needs and back to yours
 - at the start and end of the night: silence the watch, when *Silent at night* is on
-- every quarter hour: refresh the sun data or the weather (a location and time sync — the watch only recalculates its sun times on a time write)
+- hourly, except from 00:00 to 06:00: refresh the sun data or the weather (a location and time sync — the watch only recalculates its sun times on a time write)
 - on every connection: one location and time sync
 
 It wakes itself with exact Android alarms, so this keeps working while the phone dozes overnight. Requests to the watch are shared between screens, retried when the watch does not answer and serialized per setting, so two quick changes cannot undo each other.
